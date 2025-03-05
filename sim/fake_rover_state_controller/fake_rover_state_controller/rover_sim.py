@@ -12,8 +12,8 @@ from pioneer_interfaces.msg import PioneerInfo
 from .my_ros_module import PubSubManager
 
 UPDATE_RATE = 0.01
-TRANSFORM_VELOCITY_METER_PER_SEC = 0.5
-ANGLE_VELOCITY_RADIAN_PER_SEC = 0.4
+TRANSFORM_VELOCITY_COEFFICIENT = 1.0
+ANGLE_VELOCITY_COEFFICIENT = 1.0
 VEL_ALIVE = 5
 
 
@@ -38,9 +38,9 @@ class JointStates(Node):
         key = robot_name
         if self.vels[key]['alive'] <= 0:
             return
-        self.positions[key]['theta'] += UPDATE_RATE * ANGLE_VELOCITY_RADIAN_PER_SEC * az
-        self.positions[key]['x'] += UPDATE_RATE * TRANSFORM_VELOCITY_METER_PER_SEC * lx * math.cos(self.positions[key]['theta'])
-        self.positions[key]['y'] += UPDATE_RATE * TRANSFORM_VELOCITY_METER_PER_SEC * lx * math.sin(self.positions[key]['theta'])
+        self.positions[key]['theta'] += UPDATE_RATE * ANGLE_VELOCITY_COEFFICIENT * az
+        self.positions[key]['x'] += UPDATE_RATE * TRANSFORM_VELOCITY_COEFFICIENT * lx * math.cos(self.positions[key]['theta'])
+        self.positions[key]['y'] += UPDATE_RATE * TRANSFORM_VELOCITY_COEFFICIENT * lx * math.sin(self.positions[key]['theta'])
         self.vels[key]['alive'] -= 1
 
     def update_vel(self, robot_name, lx, az):
