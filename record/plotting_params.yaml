@@ -19,13 +19,17 @@ clusters:
             - [0, 25]
             - [0, 2]
           figsize: [9, 10]
+          fontsize: 16
         centroid_phase_portrait:
           enable: False
           filename: frisbee_centroid_phase
+          fontsize: 10
         cluster_phase_portrait:
           enable: True
           include_label: False
           filename: frisbee_cluster_phase_portrait
+          fontsize: 12
+          legend_fontsize: 10
 
   - enable: True
     time:
@@ -45,13 +49,17 @@ clusters:
             - [5, 12]
             - [0.5, 2]
           figsize: [10, 10]
+          fontsize: 10
         centroid_phase_portrait:
           enable: False
           filename: rotation_centroid_phase
+          fontsize: 10
         cluster_phase_portrait:
           enable: True
           include_label: False
           filename: rotation_cluster_phase_portrait
+          fontsize: 22
+          legend_fontsize: 14
 
   - enable: True
     time:
@@ -71,10 +79,14 @@ clusters:
             - [8, 15]
             - [0, 2]
           figsize: [10, 10]
+          fontsize: 10
         centroid_phase_portrait:
           enable: False
           filename: translation_centroid_phase
+          fontsize: 10
         cluster_phase_portrait:
           enable: True
           include_label: False
           filename: translation_cluster_phase_portrait
+          fontsize: 22
+          legend_fontsize: 14
