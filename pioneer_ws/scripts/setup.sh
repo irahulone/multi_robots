@@ -57,6 +57,8 @@ IMU_HEADING_OFFSET=$(read_yaml "$CONFIG_FILE" "imu.heading_offset")
 IMU_CONNECTION_TIMEOUT=$(read_yaml "$CONFIG_FILE" "imu.connection_timeout")
 IMU_RETRY_DELAY=$(read_yaml "$CONFIG_FILE" "imu.retry_delay")
 IMU_CALIBRATION_FILE=$(read_yaml "$CONFIG_FILE" "imu.calibration_file")
+IMU_USE_EXTENDED=$(read_yaml "$CONFIG_FILE" "imu.use_extended_node")
+IMU_EXTENDED_RATE=$(read_yaml "$CONFIG_FILE" "imu.extended_publish_rate")
 
 # Read Locomotion configuration
 LOCOMOTION_MAX_VEL=$(read_yaml "$CONFIG_FILE" "locomotion.max_velocity")
@@ -70,6 +72,9 @@ LOCOMOTION_RIGHT_MOTOR_SIGN=$(read_yaml "$CONFIG_FILE" "locomotion.right_motor_s
 POSE_TIMER_PERIOD=$(read_yaml "$CONFIG_FILE" "pose_converter.timer_period")
 POSE_HEALTH_CHECK_PERIOD=$(read_yaml "$CONFIG_FILE" "pose_converter.health_check_period")
 POSE_RESET_TIMEOUT=$(read_yaml "$CONFIG_FILE" "pose_converter.reset_timeout")
+POSE_USE_ADVANCED=$(read_yaml "$CONFIG_FILE" "pose_converter.use_advanced_fusion")
+POSE_ADVANCED_TIMER=$(read_yaml "$CONFIG_FILE" "pose_converter.advanced_timer_period")
+POSE_PUBLISH_DIAG=$(read_yaml "$CONFIG_FILE" "pose_converter.publish_diagnostics")
 
 # Read Monitoring configuration
 MONITOR_SENSOR_TIMEOUT=$(read_yaml "$CONFIG_FILE" "monitoring.sensor_timeout")
@@ -90,7 +95,8 @@ echo "  Workspace: $WORK_DIR"
 echo ""
 echo "Configuration loaded:"
 echo "  GPS: baudrate=$GPS_BAUDRATE, timeout=$GPS_TIMEOUT, update_rate=${GPS_UPDATE_RATE}Hz"
-echo "  IMU: heading_offset=$IMU_HEADING_OFFSET"
+echo "  IMU: heading_offset=$IMU_HEADING_OFFSET, extended_node=$IMU_USE_EXTENDED"
+echo "  Pose Converter: advanced_fusion=$POSE_USE_ADVANCED"
 echo "  Locomotion: max_vel=$LOCOMOTION_MAX_VEL"
 echo "  Monitoring: sensor_timeout=$MONITOR_SENSOR_TIMEOUT"
 
@@ -130,6 +136,15 @@ ${ROBOT_ID}_imu:
     retry_delay: $IMU_RETRY_DELAY
     calibration_file: "$HOME_DIR/$IMU_CALIBRATION_FILE"
     calibFileLoc: "$HOME_DIR/$IMU_CALIBRATION_FILE"
+
+# Extended IMU parameters
+${ROBOT_ID}_imu_extended:
+  ros__parameters:
+    robot_id: "$ROBOT_ID"
+    publish_rate: $IMU_EXTENDED_RATE
+    connection_timeout: $IMU_CONNECTION_TIMEOUT
+    retry_delay: $IMU_RETRY_DELAY
+    calibration_file: "$HOME_DIR/$IMU_CALIBRATION_FILE"
 EOF
 
 # Pose converter parameters
@@ -141,6 +156,16 @@ ${ROBOT_ID}_pose_converter:
     timer_period: $POSE_TIMER_PERIOD
     health_check_period: $POSE_HEALTH_CHECK_PERIOD
     reset_timeout: $POSE_RESET_TIMEOUT
+
+# Advanced pose converter parameters
+${ROBOT_ID}_advanced_pose_converter:
+  ros__parameters:
+    robot_id: "$ROBOT_ID"
+    timer_period: $POSE_ADVANCED_TIMER
+    health_check_period: $POSE_HEALTH_CHECK_PERIOD
+    reset_timeout: $POSE_RESET_TIMEOUT
+    use_ekf: true
+    publish_diagnostics: $POSE_PUBLISH_DIAG
 EOF
 
 # Locomotion parameters
@@ -205,13 +230,22 @@ def generate_launch_description():
         output='screen'
     )
     
-    # IMU node with parameters
-    imu_node = Node(
-        package="imu_core",
-        executable="run_imu",
-        parameters=[os.path.join(config_dir, "imu_params.yaml")],
-        output='screen'
-    )
+    # IMU node with parameters (choose based on config)
+    use_extended_imu = "$IMU_USE_EXTENDED" == "True" or "$IMU_USE_EXTENDED" == "true"
+    if use_extended_imu:
+        imu_node = Node(
+            package="imu_core",
+            executable="run_imu_extended",
+            parameters=[os.path.join(config_dir, "imu_params.yaml")],
+            output='screen'
+        )
+    else:
+        imu_node = Node(
+            package="imu_core",
+            executable="run_imu",
+            parameters=[os.path.join(config_dir, "imu_params.yaml")],
+            output='screen'
+        )
     
     # Locomotion nodes with parameters
     movebase_node = Node(
@@ -228,13 +262,22 @@ def generate_launch_description():
         output='screen'
     )
     
-    # Converter node with parameters
-    converter_node = Node(
-        package="convert_pose",
-        executable="converter",
-        parameters=[os.path.join(config_dir, "converter_params.yaml")],
-        output='screen'
-    )
+    # Converter node with parameters (choose based on config)
+    use_advanced_fusion = "$POSE_USE_ADVANCED" == "True" or "$POSE_USE_ADVANCED" == "true"
+    if use_advanced_fusion:
+        converter_node = Node(
+            package="convert_pose",
+            executable="advanced_converter",
+            parameters=[os.path.join(config_dir, "converter_params.yaml")],
+            output='screen'
+        )
+    else:
+        converter_node = Node(
+            package="convert_pose",
+            executable="converter",
+            parameters=[os.path.join(config_dir, "converter_params.yaml")],
+            output='screen'
+        )
     
     ld.add_action(gps_node)
     ld.add_action(imu_node)
@@ -462,7 +505,8 @@ echo "  Service: ${SERVICE_NAME}.service"
 echo ""
 echo "Key Settings Applied:"
 echo "  GPS: baudrate=$GPS_BAUDRATE, timeout=$GPS_TIMEOUT, update_rate=${GPS_UPDATE_RATE}Hz"
-echo "  IMU: heading_offset=$IMU_HEADING_OFFSET" 
+echo "  IMU: heading_offset=$IMU_HEADING_OFFSET, extended_node=$IMU_USE_EXTENDED" 
+echo "  Pose Converter: advanced_fusion=$POSE_USE_ADVANCED"
 echo "  Locomotion: max_vel=$LOCOMOTION_MAX_VEL"
 echo "  Monitoring: sensor_timeout=$MONITOR_SENSOR_TIMEOUT"
 echo ""

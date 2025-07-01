@@ -26,7 +26,7 @@ class ANNode(Node):
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('robot_id_list', ["p2", "p3", "p4"]),
+                ('robot_id_list', ["p1", "p2", "p3"]),
             ]
         )
         params = self._parameters
@@ -50,7 +50,7 @@ class ANNode(Node):
             self.get_logger().info('Waiting for service get_rx_power...')
     def set_pubsub(self):
         self.pubsub.create_subscription(Bool, '/joy/hardware', self.hw_sim_callback, 1)
-        self.pubsub.create_publisher(Twist, '/joy/cmd_vel', 5) #publish to cluster
+        self.pubsub.create_publisher(Twist, '/ctrl/cmd_vel', 5) #publish to cluster
         self.pubsub.create_subscription(String, '/modeA', self.update_adaptive_mode, 1)
 
         for robot_id in self.robot_id_list:
@@ -135,9 +135,10 @@ class ANNode(Node):
          #   self.get_logger().info(f"Publishing velocity: {velocity} for output: {output}")
         _msg.linear.x = math.cos(velocity)
         _msg.linear.y = math.sin(velocity)
-        self.pubsub.publish('/joy/cmd_vel', _msg)
+        self.pubsub.publish('/ctrl/cmd_vel', _msg)
 
     def publish_velocities_manager(self):
+        self.get_logger().info("pub")
         if self.output == "actual":
             self.publish_velocities("actual")
         elif self.output == "sim":

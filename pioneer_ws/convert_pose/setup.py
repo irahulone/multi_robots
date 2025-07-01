@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'converter = convert_pose.converter:main',
+            'advanced_converter = convert_pose.advanced_converter:main',
         ],
     },
 )
