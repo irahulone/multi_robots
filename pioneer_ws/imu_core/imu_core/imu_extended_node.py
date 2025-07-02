@@ -30,7 +30,8 @@ class ExtendedImuNode(Node):
                 ('publish_rate', 20.0),  # Hz
                 ('connection_timeout', 10.0),
                 ('retry_delay', 2.0),
-                ('calibration_file', f"/home/{username}/imu_calib/bno055_offsets.json")
+                ('calibration_file', f"/home/{username}/imu_calib/bno055_offsets.json"),
+                ('accel_threshold', 0.1)  # m/s^2 - threshold for acceleration noise
             ]
         )
         
@@ -40,6 +41,7 @@ class ExtendedImuNode(Node):
         self.connection_timeout = self.get_parameter('connection_timeout').get_parameter_value().double_value
         self.retry_delay = self.get_parameter('retry_delay').get_parameter_value().double_value
         self.calibration_file = self.get_parameter('calibration_file').get_parameter_value().string_value
+        self.accel_threshold = self.get_parameter('accel_threshold').get_parameter_value().double_value
         
         # Log loaded configuration
         self.get_logger().info(f'Extended IMU Node Configuration:')
@@ -47,6 +49,7 @@ class ExtendedImuNode(Node):
         self.get_logger().info(f'  Publish Rate: {self.publish_rate} Hz')
         self.get_logger().info(f'  Connection Timeout: {self.connection_timeout}s')
         self.get_logger().info(f'  Retry Delay: {self.retry_delay}s')
+        self.get_logger().info(f'  Acceleration Threshold: {self.accel_threshold} m/s²')
         
         # Connection state
         self.i2c = None
@@ -209,12 +212,17 @@ class ExtendedImuNode(Node):
                     imu_msg.angular_velocity_covariance[4] = 0.01
                     imu_msg.angular_velocity_covariance[8] = 0.01
                 
-                # Linear acceleration (m/s^2)
+                # Linear acceleration (m/s^2) with threshold filtering
                 linear_accel = self.sensor.linear_acceleration
                 if linear_accel and None not in linear_accel:
-                    imu_msg.linear_acceleration.x = linear_accel[0]
-                    imu_msg.linear_acceleration.y = linear_accel[1]
-                    imu_msg.linear_acceleration.z = linear_accel[2]
+                    # Apply threshold to filter out noise
+                    ax = linear_accel[0] if abs(linear_accel[0]) >= self.accel_threshold else 0.0
+                    ay = linear_accel[1] if abs(linear_accel[1]) >= self.accel_threshold else 0.0
+                    az = linear_accel[2] if abs(linear_accel[2]) >= self.accel_threshold else 0.0
+                    
+                    imu_msg.linear_acceleration.x = ax
+                    imu_msg.linear_acceleration.y = ay
+                    imu_msg.linear_acceleration.z = az
                     imu_msg.linear_acceleration_covariance[0] = 0.1
                     imu_msg.linear_acceleration_covariance[4] = 0.1
                     imu_msg.linear_acceleration_covariance[8] = 0.1
@@ -222,12 +230,12 @@ class ExtendedImuNode(Node):
                 self.publisher_imu.publish(imu_msg)
                 
                 # Publish individual messages
-                # Linear acceleration
+                # Linear acceleration (with threshold applied)
                 if linear_accel and None not in linear_accel:
                     linear_msg = Vector3()
-                    linear_msg.x = linear_accel[0]
-                    linear_msg.y = linear_accel[1]
-                    linear_msg.z = linear_accel[2]
+                    linear_msg.x = ax  # Use threshold-filtered values
+                    linear_msg.y = ay
+                    linear_msg.z = az
                     self.publisher_linear_accel.publish(linear_msg)
                 
                 # Angular velocity

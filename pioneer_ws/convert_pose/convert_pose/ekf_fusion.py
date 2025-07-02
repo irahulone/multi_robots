@@ -13,8 +13,9 @@ class ExtendedKalmanFilter:
     - omega: angular velocity (rad/s)
     """
     
-    def __init__(self, dt: float = 0.1):
+    def __init__(self, dt: float = 0.1, accel_threshold: float = 0.1):
         self.dt = dt
+        self.accel_threshold = accel_threshold  # Threshold for acceleration noise (m/s²)
         
         # State vector initialization
         self.state = np.zeros(6)  # [x, y, vx, vy, theta, omega]
@@ -55,6 +56,12 @@ class ExtendedKalmanFilter:
         ax, ay: linear accelerations in body frame (m/s²)
         omega: angular velocity (rad/s), if available
         """
+        # Apply threshold to accelerations to remove noise offset
+        if abs(ax) < self.accel_threshold:
+            ax = 0.0
+        if abs(ay) < self.accel_threshold:
+            ay = 0.0
+        
         # Extract current state
         x, y, vx, vy, theta, w = self.state
         
