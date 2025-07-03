@@ -56,6 +56,12 @@ class AdvancedPoseConverter(Node):
         self.ekf = ExtendedKalmanFilter(dt=self.timer_period)
         self.fusion_manager = SensorFusionManager(self.ekf)
         
+        # EKF initialization flags
+        self.ekf_initialized = False
+        self.waiting_for_ref_gps = True
+        self.initial_samples = []
+        self.initial_sample_count = 10  # Number of samples to average for initialization
+        
         # Initialize all data variables
         self.ref_lat = None
         self.ref_lon = None
@@ -226,6 +232,10 @@ class AdvancedPoseConverter(Node):
             with self.data_lock:
                 self.ref_lat = result.gps.latitude
                 self.ref_lon = result.gps.longitude
+                # Clear any previous initialization samples when reference GPS is updated
+                if self.waiting_for_ref_gps:
+                    self.initial_samples = []
+                    self.get_logger().info('Reference GPS updated, clearing initialization samples')
             self.get_logger().info(f'Reference GPS received: {self.ref_lat:.6f}, {self.ref_lon:.6f}')
         except Exception as e:
             self.get_logger().error(f'Failed to get reference GPS: {e}')
@@ -343,11 +353,19 @@ class AdvancedPoseConverter(Node):
                 self.lat_offset = self.lat - self.ref_lat
                 self.lon_offset = self.lon - self.ref_lon
                 
-                # Reset EKF position
+                # Clear any initialization samples and reset EKF
+                self.initial_samples = []
+                self.waiting_for_ref_gps = False
+                
+                # Reset EKF position with reference GPS as origin
                 x, y = self.convert_gps_to_pose(self.lat, self.lon, self.ref_lat, self.ref_lon)
-                self.ekf.reset(x=x, y=y, theta=self.degree_to_radian_pi_range(self.euler_x - self.calibration))
+                theta = self.degree_to_radian_pi_range(self.euler_x - self.calibration) if self.euler_x is not None else 0.0
+                
+                self.ekf.reset(x=x, y=y, theta=theta)
+                self.ekf_initialized = True
                 
                 self.get_logger().info(f'[{self.robot_id}]GPS reset completed: offsets {self.lat_offset:.6f}, {self.lon_offset:.6f}')
+                self.get_logger().info(f'EKF reset at: x={x:.2f}m, y={y:.2f}m from reference GPS')
 
     def reset_imu_callback(self, msg):
         """Handle IMU reset"""
@@ -385,6 +403,19 @@ class AdvancedPoseConverter(Node):
                 if self.ref_lat is None or self.ref_lon is None:
                     return
                 
+                # Handle EKF initialization if not yet initialized
+                if not self.ekf_initialized and self.waiting_for_ref_gps:
+                    if self.validate_initial_data():
+                        if self.initialize_ekf_from_current_position():
+                            self.waiting_for_ref_gps = False
+                            self.get_logger().info('EKF initialization complete, starting normal operation')
+                        else:
+                            # Still collecting samples or initialization failed
+                            return
+                    else:
+                        # Required data not yet available
+                        return
+                
                 # Prepare sensor data for fusion
                 gps_data = None
                 imu_data = None
@@ -420,7 +451,7 @@ class AdvancedPoseConverter(Node):
                         'calibration': self.imu_calibration_status
                     }
                 
-                if self.use_ekf and (gps_data or imu_data):
+                if self.use_ekf and self.ekf_initialized and (gps_data or imu_data):
                     # Perform sensor fusion
                     state = self.fusion_manager.fuse_sensors(gps_data, imu_data)
                     
@@ -514,6 +545,87 @@ class AdvancedPoseConverter(Node):
             return False
         
         return True
+    
+    def validate_initial_data(self):
+        """Validate that all required data is available for initialization"""
+        # Reference GPS must be available
+        if self.ref_lat is None or self.ref_lon is None:
+            self.get_logger().debug("Reference GPS not available for initialization")
+            return False
+        
+        # Current GPS must be available
+        if not self.gps_data_available or self.lat is None or self.lon is None:
+            self.get_logger().debug("GPS data not available for initialization")
+            return False
+        
+        # IMU data is optional but recommended
+        if not self.imu_data_available:
+            self.get_logger().debug("IMU data not available for initialization (will use GPS only)")
+        
+        return True
+    
+    def initialize_ekf_from_current_position(self):
+        """Initialize EKF from current robot position relative to reference GPS"""
+        try:
+            # Calculate relative position from reference GPS
+            x, y = self.convert_gps_to_pose(
+                self.lat - self.lat_offset,
+                self.lon - self.lon_offset,
+                self.ref_lat,
+                self.ref_lon
+            )
+            
+            # Get initial heading from IMU if available
+            theta = 0.0
+            if self.euler_x is not None:
+                theta = self.degree_to_radian_pi_range(self.euler_x - self.calibration)
+            
+            # Collect initial samples for averaging
+            self.initial_samples.append([x, y, theta])
+            
+            # Wait for enough samples
+            if len(self.initial_samples) < self.initial_sample_count:
+                self.get_logger().debug(f'Collecting initialization samples: {len(self.initial_samples)}/{self.initial_sample_count}')
+                return False
+            
+            # Calculate average position and heading
+            samples_array = np.array(self.initial_samples)
+            avg_x = np.mean(samples_array[:, 0])
+            avg_y = np.mean(samples_array[:, 1])
+            
+            # Handle circular mean for angles
+            sin_sum = np.sum(np.sin(samples_array[:, 2]))
+            cos_sum = np.sum(np.cos(samples_array[:, 2]))
+            avg_theta = np.arctan2(sin_sum, cos_sum)
+            
+            # Initialize EKF state
+            self.ekf.state = np.array([avg_x, avg_y, 0.0, 0.0, avg_theta, 0.0])
+            
+            # Set initial covariance based on GPS quality
+            initial_position_variance = 2.0 if self.gps_satellites >= 6 else 5.0
+            self.ekf.P = np.diag([
+                initial_position_variance,  # x position variance (m²)
+                initial_position_variance,  # y position variance (m²)
+                0.5,                       # x velocity variance
+                0.5,                       # y velocity variance
+                0.1,                       # heading variance
+                0.05                       # angular velocity variance
+            ])
+            
+            self.ekf_initialized = True
+            self.get_logger().info(
+                f'EKF initialized successfully:\n'
+                f'  Position: x={avg_x:.2f}m, y={avg_y:.2f}m (relative to reference GPS)\n'
+                f'  Heading: {avg_theta:.2f}rad ({np.degrees(avg_theta):.1f}°)\n'
+                f'  GPS satellites: {self.gps_satellites}\n'
+                f'  Reference GPS: lat={self.ref_lat:.6f}, lon={self.ref_lon:.6f}'
+            )
+            
+            return True
+            
+        except Exception as e:
+            self.get_logger().error(f'EKF initialization error: {e}')
+            return False
         
     def degree_to_radian_pi_range(self, degree):
         """Convert degree to radian with range normalization"""
