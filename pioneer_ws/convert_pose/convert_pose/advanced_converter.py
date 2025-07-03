@@ -372,6 +372,29 @@ class AdvancedPoseConverter(Node):
         with self.data_lock:
             if self.euler_x is not None:
                 self.calibration = self.euler_x
+                
+                # Clear initialization samples and trigger re-initialization if needed
+                if self.ekf_initialized:
+                    # If EKF is already initialized, just update the heading in the current state
+                    if self.ref_lat is not None and self.lat is not None:
+                        # Get current position
+                        x, y = self.convert_gps_to_pose(
+                            self.lat - self.lat_offset,
+                            self.lon - self.lon_offset,
+                            self.ref_lat,
+                            self.ref_lon
+                        )
+                        theta = self.degree_to_radian_pi_range(self.euler_x - self.calibration)
+                        
+                        # Update EKF state with new heading
+                        self.ekf.state[4] = theta  # Update heading in state vector
+                        self.get_logger().info(f'[{self.robot_id}]EKF heading updated: {np.degrees(theta):.1f}°')
+                else:
+                    # If EKF not initialized yet, clear samples to trigger fresh initialization
+                    self.initial_samples = []
+                    self.waiting_for_ref_gps = True
+                    self.get_logger().info(f'[{self.robot_id}]IMU reset during initialization, clearing samples')
+                
                 self.get_logger().info(f'[{self.robot_id}]IMU reset completed: calibration {self.calibration:.2f}')
 
     def health_check_callback(self):
