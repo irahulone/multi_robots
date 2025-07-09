@@ -13,9 +13,10 @@ class ExtendedKalmanFilter:
     - omega: angular velocity (rad/s)
     """
     
-    def __init__(self, dt: float = 0.1, accel_threshold: float = 0.05):
+    def __init__(self, dt: float = 0.1, accel_threshold: float = 0.05, use_imu_accel: bool = False):
         self.dt = dt
         self.accel_threshold = accel_threshold  # Threshold for acceleration noise (m/s²)
+        self.use_imu_accel = use_imu_accel  # Whether to use IMU acceleration for velocity estimation
         
         # State vector initialization
         self.state = np.zeros(6)  # [x, y, vx, vy, theta, omega]
@@ -58,6 +59,11 @@ class ExtendedKalmanFilter:
         self.stationary_threshold = 3   # Fewer steps before applying decay
         self.force_zero_threshold = 0.005  # Force velocity to zero below this threshold
         
+        # Acceleration bias estimation
+        self.accel_bias = np.array([0.0, 0.0])  # Estimated acceleration bias
+        self.bias_samples = []
+        self.bias_estimation_complete = False
+        
     def predict(self, ax: float = 0.0, ay: float = 0.0, omega: Optional[float] = None):
         """
         Prediction step using motion model
@@ -72,11 +78,21 @@ class ExtendedKalmanFilter:
             w = omega
             self.state[5] = w
         
-        # Apply threshold to accelerations to remove noise offset
-        if abs(ax) < self.accel_threshold:
+        # Don't use IMU acceleration if disabled
+        if not self.use_imu_accel:
             ax = 0.0
-        if abs(ay) < self.accel_threshold:
             ay = 0.0
+        else:
+            # Apply threshold to accelerations to remove noise offset
+            if abs(ax) < self.accel_threshold:
+                ax = 0.0
+            if abs(ay) < self.accel_threshold:
+                ay = 0.0
+            
+            # Subtract estimated bias
+            if self.bias_estimation_complete:
+                ax -= self.accel_bias[0]
+                ay -= self.accel_bias[1]
         
         # Check if robot is stationary
         speed = np.sqrt(vx**2 + vy**2)
@@ -100,6 +116,15 @@ class ExtendedKalmanFilter:
                     self.state[3] = 0.0
                 if abs(self.state[5]) < self.force_zero_threshold:
                     self.state[5] = 0.0
+                    
+                # Collect bias samples when stationary
+                if self.use_imu_accel and not self.bias_estimation_complete and len(self.bias_samples) < 50:
+                    self.bias_samples.append([ax, ay])
+                    if len(self.bias_samples) >= 50:
+                        # Calculate average bias
+                        self.accel_bias = np.mean(self.bias_samples, axis=0)
+                        self.bias_estimation_complete = True
+                        print(f"EKF: Acceleration bias estimated: ax_bias={self.accel_bias[0]:.4f}, ay_bias={self.accel_bias[1]:.4f}")
             else:
                 # Even before threshold, apply gentle decay
                 self.state[2] *= 0.98  # vx gentle decay
@@ -108,9 +133,13 @@ class ExtendedKalmanFilter:
         else:
             self.stationary_count = 0
         
-        # Convert body frame accelerations to world frame
-        ax_world = ax * np.cos(theta) - ay * np.sin(theta)
-        ay_world = ax * np.sin(theta) + ay * np.cos(theta)
+        # Convert body frame accelerations to world frame only if using IMU acceleration
+        if self.use_imu_accel:
+            ax_world = ax * np.cos(theta) - ay * np.sin(theta)
+            ay_world = ax * np.sin(theta) + ay * np.cos(theta)
+        else:
+            ax_world = 0.0
+            ay_world = 0.0
         
         # State transition matrix (Jacobian of motion model)
         F = np.eye(6)
@@ -124,8 +153,8 @@ class ExtendedKalmanFilter:
         self.state[0] += self.state[2] * self.dt  # x (use current vx, not vx from previous line)
         self.state[1] += self.state[3] * self.dt  # y (use current vy, not vy from previous line)
         
-        # Only update velocity if not stationary or if acceleration is significant
-        if (not is_stationary or 
+        # Only update velocity if using IMU acceleration and not stationary
+        if self.use_imu_accel and (not is_stationary or 
             abs(ax_world) > self.accel_threshold or 
             abs(ay_world) > self.accel_threshold):
             self.state[2] += ax_world * self.dt  # vx
@@ -174,6 +203,11 @@ class ExtendedKalmanFilter:
         
         # State update
         self.state += K @ innovation
+        
+        # If stationary for a long time and GPS is stable, reset velocity to zero
+        if self.stationary_count > 10 and gps_position_change < 0.05:
+            self.state[2] = 0.0  # vx
+            self.state[3] = 0.0  # vy
         
         # Covariance update
         I = np.eye(6)

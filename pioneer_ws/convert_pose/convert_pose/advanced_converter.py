@@ -52,8 +52,8 @@ class AdvancedPoseConverter(Node):
         self.get_logger().info(f'  Timer Period: {self.timer_period}s')
         self.get_logger().info(f'  EKF Enabled: {self.use_ekf}')
         
-        # Initialize EKF
-        self.ekf = ExtendedKalmanFilter(dt=self.timer_period)
+        # Initialize EKF with IMU acceleration disabled by default
+        self.ekf = ExtendedKalmanFilter(dt=self.timer_period, use_imu_accel=False)
         self.fusion_manager = SensorFusionManager(self.ekf)
         
         # EKF initialization flags
