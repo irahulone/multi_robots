@@ -50,18 +50,19 @@ class ExtendedKalmanFilter:
         # Last update time for dead reckoning
         self.last_prediction_time = None
         
+        # Motion detection parameters
+        self.velocity_threshold = 0.05  # m/s - threshold for motion detection
+        self.omega_threshold = 0.02     # rad/s - threshold for rotation detection
+        self.velocity_decay_factor = 0.95  # Velocity decay when stationary
+        self.stationary_count = 0       # Counter for stationary detection
+        self.stationary_threshold = 5   # Number of steps before applying decay
+        
     def predict(self, ax: float = 0.0, ay: float = 0.0, omega: Optional[float] = None):
         """
         Prediction step using motion model
         ax, ay: linear accelerations in body frame (m/s²)
         omega: angular velocity (rad/s), if available
         """
-        # Apply threshold to accelerations to remove noise offset
-        if abs(ax) < self.accel_threshold:
-            ax = 0.0
-        if abs(ay) < self.accel_threshold:
-            ay = 0.0
-        
         # Extract current state
         x, y, vx, vy, theta, w = self.state
         
@@ -69,6 +70,37 @@ class ExtendedKalmanFilter:
         if omega is not None:
             w = omega
             self.state[5] = w
+        
+        # Apply threshold to accelerations to remove noise offset
+        if abs(ax) < self.accel_threshold:
+            ax = 0.0
+        if abs(ay) < self.accel_threshold:
+            ay = 0.0
+        
+        # Check if robot is stationary
+        speed = np.sqrt(vx**2 + vy**2)
+        is_stationary = (abs(ax) < self.accel_threshold and 
+                        abs(ay) < self.accel_threshold and 
+                        abs(w) < self.omega_threshold and
+                        speed < self.velocity_threshold)
+        
+        if is_stationary:
+            self.stationary_count += 1
+            # Apply velocity decay if stationary for a while
+            if self.stationary_count > self.stationary_threshold:
+                self.state[2] *= self.velocity_decay_factor  # vx
+                self.state[3] *= self.velocity_decay_factor  # vy
+                self.state[5] *= self.velocity_decay_factor  # omega
+                
+                # Force to zero if very small
+                if abs(self.state[2]) < 0.001:
+                    self.state[2] = 0.0
+                if abs(self.state[3]) < 0.001:
+                    self.state[3] = 0.0
+                if abs(self.state[5]) < 0.001:
+                    self.state[5] = 0.0
+        else:
+            self.stationary_count = 0
         
         # Convert body frame accelerations to world frame
         ax_world = ax * np.cos(theta) - ay * np.sin(theta)
@@ -83,10 +115,16 @@ class ExtendedKalmanFilter:
         F[4, 5] = self.dt  # theta depends on omega
         
         # Update state prediction
-        self.state[0] += vx * self.dt  # x
-        self.state[1] += vy * self.dt  # y
-        self.state[2] += ax_world * self.dt  # vx
-        self.state[3] += ay_world * self.dt  # vy
+        self.state[0] += self.state[2] * self.dt  # x (use current vx, not vx from previous line)
+        self.state[1] += self.state[3] * self.dt  # y (use current vy, not vy from previous line)
+        
+        # Only update velocity if not stationary or if acceleration is significant
+        if (not is_stationary or 
+            abs(ax_world) > self.accel_threshold or 
+            abs(ay_world) > self.accel_threshold):
+            self.state[2] += ax_world * self.dt  # vx
+            self.state[3] += ay_world * self.dt  # vy
+        
         self.state[4] += w * self.dt  # theta
         
         # Normalize theta to [-pi, pi]
@@ -135,23 +173,23 @@ class ExtendedKalmanFilter:
         # Adjust measurement noise based on calibration status
         calib_factor = 1.0 / (1.0 + min(calibration_status))
         
-        # Measurement model for IMU
-        H = np.zeros((4, 6))
+        # Apply acceleration threshold for IMU measurements as well
+        if abs(ax_imu) < self.accel_threshold:
+            ax_imu = 0.0
+        if abs(ay_imu) < self.accel_threshold:
+            ay_imu = 0.0
+        
+        # Only update heading and angular velocity - don't use acceleration for velocity estimation
+        # This prevents double-integration errors
+        H = np.zeros((2, 6))
         H[0, 4] = 1  # IMU measures theta
         H[1, 5] = 1  # IMU measures omega
-        H[2, 2] = 1  # IMU indirectly measures vx through acceleration
-        H[3, 3] = 1  # IMU indirectly measures vy through acceleration
         
         # Adjust measurement noise based on calibration
-        R = self.R_imu * calib_factor
-        
-        # Convert IMU accelerations to velocity measurements
-        # This is approximate - assumes constant acceleration over dt
-        vx_meas = self.state[2] + ax_imu * self.dt
-        vy_meas = self.state[3] + ay_imu * self.dt
+        R = self.R_imu[:2, :2] * calib_factor  # Only use heading and omega noise
         
         # Innovation
-        z = np.array([theta_imu, omega_imu, vx_meas, vy_meas])
+        z = np.array([theta_imu, omega_imu])
         z_pred = H @ self.state
         
         # Handle angle wrapping for theta
@@ -192,6 +230,7 @@ class ExtendedKalmanFilter:
         """Reset filter state"""
         self.state = np.array([x, y, 0, 0, theta, 0])
         self.P = np.eye(6) * 100
+        self.stationary_count = 0  # Reset stationary counter
         
     def _normalize_angle(self, angle: float) -> float:
         """Normalize angle to [-pi, pi]"""
