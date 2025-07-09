@@ -13,7 +13,7 @@ class ExtendedKalmanFilter:
     - omega: angular velocity (rad/s)
     """
     
-    def __init__(self, dt: float = 0.1, accel_threshold: float = 0.1):
+    def __init__(self, dt: float = 0.1, accel_threshold: float = 0.05):
         self.dt = dt
         self.accel_threshold = accel_threshold  # Threshold for acceleration noise (m/s²)
         
@@ -23,20 +23,20 @@ class ExtendedKalmanFilter:
         # State covariance matrix
         self.P = np.eye(6) * 100  # Initial uncertainty
         
-        # Process noise covariance
+        # Process noise covariance - reduced to minimize drift
         self.Q = np.diag([
-            0.1,    # x position noise
-            0.1,    # y position noise  
-            0.5,    # x velocity noise
-            0.5,    # y velocity noise
-            0.01,   # heading noise
-            0.1     # angular velocity noise
+            0.01,   # x position noise (reduced)
+            0.01,   # y position noise (reduced)
+            0.1,    # x velocity noise (reduced)
+            0.1,    # y velocity noise (reduced)
+            0.005,  # heading noise (reduced)
+            0.02    # angular velocity noise (reduced)
         ])
         
         # GPS measurement noise covariance
         self.R_gps = np.diag([
-            2.0,    # x position measurement noise (m)
-            2.0     # y position measurement noise (m)
+            1.5,    # x position measurement noise (m) - slightly reduced
+            1.5     # y position measurement noise (m) - slightly reduced
         ])
         
         # IMU measurement noise covariance
@@ -50,12 +50,13 @@ class ExtendedKalmanFilter:
         # Last update time for dead reckoning
         self.last_prediction_time = None
         
-        # Motion detection parameters
-        self.velocity_threshold = 0.05  # m/s - threshold for motion detection
-        self.omega_threshold = 0.02     # rad/s - threshold for rotation detection
-        self.velocity_decay_factor = 0.95  # Velocity decay when stationary
+        # Motion detection parameters - more aggressive
+        self.velocity_threshold = 0.02  # m/s - lower threshold for motion detection
+        self.omega_threshold = 0.01     # rad/s - lower threshold for rotation detection
+        self.velocity_decay_factor = 0.85  # More aggressive velocity decay when stationary
         self.stationary_count = 0       # Counter for stationary detection
-        self.stationary_threshold = 5   # Number of steps before applying decay
+        self.stationary_threshold = 3   # Fewer steps before applying decay
+        self.force_zero_threshold = 0.005  # Force velocity to zero below this threshold
         
     def predict(self, ax: float = 0.0, ay: float = 0.0, omega: Optional[float] = None):
         """
@@ -86,19 +87,24 @@ class ExtendedKalmanFilter:
         
         if is_stationary:
             self.stationary_count += 1
-            # Apply velocity decay if stationary for a while
-            if self.stationary_count > self.stationary_threshold:
+            # Apply velocity decay immediately when stationary
+            if self.stationary_count >= self.stationary_threshold:
                 self.state[2] *= self.velocity_decay_factor  # vx
                 self.state[3] *= self.velocity_decay_factor  # vy
                 self.state[5] *= self.velocity_decay_factor  # omega
                 
                 # Force to zero if very small
-                if abs(self.state[2]) < 0.001:
+                if abs(self.state[2]) < self.force_zero_threshold:
                     self.state[2] = 0.0
-                if abs(self.state[3]) < 0.001:
+                if abs(self.state[3]) < self.force_zero_threshold:
                     self.state[3] = 0.0
-                if abs(self.state[5]) < 0.001:
+                if abs(self.state[5]) < self.force_zero_threshold:
                     self.state[5] = 0.0
+            else:
+                # Even before threshold, apply gentle decay
+                self.state[2] *= 0.98  # vx gentle decay
+                self.state[3] *= 0.98  # vy gentle decay
+                self.state[5] *= 0.98  # omega gentle decay
         else:
             self.stationary_count = 0
         
@@ -138,6 +144,16 @@ class ExtendedKalmanFilter:
         Update step with GPS measurement
         gps_accuracy: GPS accuracy factor (higher = less accurate)
         """
+        # Check if GPS change is significant enough to process
+        gps_position_change = np.sqrt((x_gps - self.state[0])**2 + (y_gps - self.state[1])**2)
+        gps_change_threshold = 0.1  # meters - ignore very small GPS changes
+        
+        # If robot is stationary and GPS change is small, reduce GPS influence
+        speed = np.sqrt(self.state[2]**2 + self.state[3]**2)
+        if speed < self.velocity_threshold and gps_position_change < gps_change_threshold:
+            # Increase GPS noise to reduce influence during stationary periods
+            gps_accuracy *= 3.0
+        
         # Measurement model for GPS (observes x, y)
         H = np.zeros((2, 6))
         H[0, 0] = 1  # GPS measures x
@@ -148,7 +164,7 @@ class ExtendedKalmanFilter:
         
         # Innovation (measurement residual)
         z = np.array([x_gps, y_gps])
-        y = z - H @ self.state
+        innovation = z - H @ self.state
         
         # Innovation covariance
         S = H @ self.P @ H.T + R
@@ -157,7 +173,7 @@ class ExtendedKalmanFilter:
         K = self.P @ H.T @ np.linalg.inv(S)
         
         # State update
-        self.state += K @ y
+        self.state += K @ innovation
         
         # Covariance update
         I = np.eye(6)
