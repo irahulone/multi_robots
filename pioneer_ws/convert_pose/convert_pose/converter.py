@@ -29,7 +29,8 @@ class PoseConverter(Node):
                 ('robot_id', robot_id),
                 ('timer_period', 0.1),
                 ('health_check_period', 1.0),
-                ('reset_timeout', 5.0)
+                ('reset_timeout', 5.0),
+                ('disable_imu', False)
             ]
         )
         
@@ -38,7 +39,8 @@ class PoseConverter(Node):
         self.timer_period = self.get_parameter('timer_period').get_parameter_value().double_value
         self.health_check_period = self.get_parameter('health_check_period').get_parameter_value().double_value
         self.reset_timeout = self.get_parameter('reset_timeout').get_parameter_value().double_value
-        
+        self.disable_imu = self.get_parameter('disable_imu').get_parameter_value().bool_value
+
         # Log loaded configuration
         self.get_logger().info(f'Pose Converter Configuration:')
         self.get_logger().debug(f'  Robot ID: {self.robot_id}')
@@ -463,7 +465,8 @@ class PoseConverter(Node):
                     self.ref_lat, 
                     self.ref_lon
                 )
-                msg.theta = self.degree_to_radian_pi_range(self.euler_x - self.calibration)
+                if not self.disable_imu:
+                    msg.theta = self.degree_to_radian_pi_range(self.euler_x - self.calibration)
                 
                 self.pose_publisher.publish(msg)
                 self.get_logger().debug(f"Published pose: x={msg.x:.2f}, y={msg.y:.2f}, theta={msg.theta:.2f}")
@@ -481,8 +484,8 @@ class PoseConverter(Node):
             self.get_logger().debug("GPS data not available")
             return False
         
-        if not self.imu_data_available or self.quaternion is None or self.euler_x is None or self.calibration is None:
-            self.get_logger().debug("IMU data not available")
+        if not self.disable_imu and (not self.imu_data_available or self.quaternion is None or self.euler_x is None or self.calibration is None):
+            self.get_logger().info("IMU data not available")
             return False
         
         return True
