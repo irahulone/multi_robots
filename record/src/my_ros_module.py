@@ -1,1 +1,0 @@
-/home/neo/ros2_ws/pioneer_base/lib/my_ros_module.py
