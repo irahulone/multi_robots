@@ -3,9 +3,9 @@
 import sys
 import math
 import rclpy
-from PyQt6.QtWidgets import QApplication, QVBoxLayout, QLabel, QDoubleSpinBox
+from PyQt6.QtWidgets import QApplication, QVBoxLayout, QLabel, QDoubleSpinBox, QCheckBox
 from PyQt6.QtCore import QTimer
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float32MultiArray, Bool
 from pioneer_interfaces.msg import ClusterInfo
 
 from .joy_cmd_base import JoyCmdBase
@@ -27,9 +27,12 @@ class JoyCmd5Robot(JoyCmdBase):
         self.cluster_b3: float = 0.0
         self.cluster_b4: float = 0.0
         self.cluster_b5: float = 0.0
+
+        self.pioneer_hw = [False, False, False, False, False]
         
         self._setup_additional_publishers()
         self._setup_additional_subscriptions()
+        self.additional_timer = self.create_timer(0.1, self._publish_pioneer_hw)
         
     def _setup_additional_publishers(self) -> None:
         """Setup additional publishers for cluster control."""
@@ -37,6 +40,9 @@ class JoyCmd5Robot(JoyCmdBase):
             Float32MultiArray, '/cluster_params', DEFAULT_QOS)
         self.pubsub.create_publisher(
             Float32MultiArray, '/cluster_desired', DEFAULT_QOS)
+        for i in range(5):
+            self.pubsub.create_publisher(
+                Bool, f'/p{i+1}/hardware', DEFAULT_QOS)
             
     def _setup_additional_subscriptions(self) -> None:
         """Setup additional subscriptions."""
@@ -80,6 +86,13 @@ class JoyCmd5Robot(JoyCmdBase):
             reset_msg = Float32MultiArray(data=[-1.0, -1.0, -1.0])
             self.pubsub.publish('/cluster_params', reset_msg)
 
+    def _publish_pioneer_hw(self) -> None:
+        """Publish pioneer hardware mode selections."""
+        for i in range(5):
+            msg = Bool()
+            msg.data = self.pioneer_hw[i]
+            self.pubsub.publish(f'/p{i+1}/hardware', msg)
+
 
 class StatusWindow5Robot(StatusWindowBase):
     """GUI window for 5-robot cluster control."""
@@ -105,6 +118,13 @@ class StatusWindow5Robot(StatusWindowBase):
             
     def _add_custom_controls(self, layout: QVBoxLayout) -> None:
         """Add 5-robot specific control widgets."""
+        for n in range(5):
+            hw_checkbox = QCheckBox(f"p{n+1} Hardware Mode")
+            hw_checkbox.setChecked(self.node.pioneer_hw[n])
+            hw_checkbox.toggled.connect(
+                lambda checked, idx=n: self.update_pioneer_hw(checked, idx))
+            layout.addWidget(hw_checkbox)
+        
         # Distance parameters
         for i, param_name in enumerate(["d2", "d3", "d4", "d5"], 2):
             spin = QDoubleSpinBox()
@@ -140,7 +160,11 @@ class StatusWindow5Robot(StatusWindowBase):
         self.status_labels["cluster_b3"].setText(f"Cluster B3: {self.node.cluster_b3:.4f}")
         self.status_labels["cluster_b4"].setText(f"Cluster B4: {self.node.cluster_b4:.4f}")
         self.status_labels["cluster_b5"].setText(f"Cluster B5: {self.node.cluster_b5:.4f}")
-        
+
+    def update_pioneer_hw(self, checked: bool, n) -> None:
+        """Update pioneer hardware mode."""
+        self.node.pioneer_hw[n] = checked
+
     def update_cluster_distance(self, param_name: str, value: float) -> None:
         """Update cluster distance parameter."""
         setattr(self.node, f"cluster_{param_name}", value)

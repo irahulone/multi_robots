@@ -107,7 +107,7 @@ class StatusWindowBase(QMainWindow):
         self.hw_checkbox = QCheckBox("Hardware Mode")
         self.hw_checkbox.setChecked(self.node.hw_sel)
         self.hw_checkbox.toggled.connect(self.update_hw)
-        layout.addWidget(self.hw_checkbox)
+        #layout.addWidget(self.hw_checkbox)
         
         # Cluster position controls
         self._add_cluster_position_controls(layout)
