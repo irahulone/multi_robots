@@ -50,6 +50,7 @@ class FakeRover(Node):
         self.rssi = None
 
         self.pubsub.create_subscription(Twist, f'{self.prefix}/{self.robot_id}/cmd_vel', self.teleop_callback, 10)
+        self.pubsub.create_subscription(Pose2D, f'{self.prefix}/{self.robot_id}/reset_pose2D', self.reset_callback, 10)
         self.pubsub.create_publisher(Pose2D, f'{self.prefix}/{self.robot_id}/pose2D', 10)
         self.pubsub.create_publisher(Float64, f'{self.prefix}/{self.robot_id}/rssi', 5)
         
@@ -108,6 +109,10 @@ class FakeRover(Node):
 
     def teleop_callback(self, msg):
         self.vel.update({'transform': max(-MAX_TRANS, min(msg.linear.x, MAX_TRANS)), 'rotate': max(-MAX_ROTATE, min(msg.angular.z, MAX_ROTATE)), 'alive': VEL_ALIVE})
+
+    def reset_callback(self, msg):
+        self.position.update({'x': msg.x, 'y': msg.y, 'theta': msg.theta})
+        self.pubsub.publish(f'{self.prefix}/{self.robot_id}/pose2D', Pose2D(x=self.position['x'], y=self.position['y'], theta=self.position['theta']))
 
 
 
