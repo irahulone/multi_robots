@@ -1,10 +1,13 @@
 """Base GUI components for teleop control."""
 
 import math
+import signal
+import sys
 from typing import Dict, Any, Optional
 from PyQt6.QtWidgets import (
     QMainWindow, QLabel, QVBoxLayout, QHBoxLayout, QWidget,
-    QSpinBox, QComboBox, QCheckBox, QDoubleSpinBox, QPushButton
+    QSpinBox, QComboBox, QCheckBox, QDoubleSpinBox, QPushButton,
+    QApplication
 )
 from PyQt6.QtCore import QTimer
 from std_msgs.msg import Float32MultiArray
@@ -244,3 +247,37 @@ class StatusWindowBase(QMainWindow):
         msg = Float32MultiArray()
         msg.data = [self.node.cluster_x, self.node.cluster_y, self.node.cluster_t]
         self.node.pubsub.publish('/cluster_desired', msg)
+
+    def cleanup(self) -> None:
+        """Clean up resources before closing."""
+        if hasattr(self, 'update_timer') and self.update_timer:
+            self.update_timer.stop()
+            self.update_timer.deleteLater()
+
+    def closeEvent(self, event) -> None:
+        """Handle window close event."""
+        self.cleanup()
+        event.accept()
+        # Quit the application
+        QApplication.quit()
+
+
+def setup_signal_handlers(window: StatusWindowBase) -> None:
+    """Setup signal handlers for graceful shutdown on Ctrl+C."""
+    def signal_handler(signum, frame):
+        """Handle SIGINT (Ctrl+C) signal."""
+        print("\nReceived interrupt signal. Shutting down gracefully...")
+        window.cleanup()
+        window.close()
+        sys.exit(0)
+
+    # Register signal handler for SIGINT (Ctrl+C)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    # Create a QTimer to allow Python to process signals
+    # This is necessary because Qt event loop can block signal processing
+    timer = QTimer()
+    timer.start(500)  # Check for signals every 500ms
+    timer.timeout.connect(lambda: None)  # Empty slot to allow signal processing
+
+    return timer

@@ -7,7 +7,7 @@ from sensor_msgs.msg import Joy
 from std_msgs.msg import Bool, Int16, String, Float32MultiArray
 from typing import Dict, Optional, Tuple, Any
 
-from .my_ros_module import JoyBase
+from gui_package.my_ros_module import JoyBase
 from .constants import (
     RoverMode, DEFAULT_QOS, LOW_QOS,
     DEFAULT_N_ROVER, MAX_VEL_TRANS, MAX_VEL_ROT

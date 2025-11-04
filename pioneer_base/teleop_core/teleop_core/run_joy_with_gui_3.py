@@ -9,7 +9,7 @@ from std_msgs.msg import Float32MultiArray
 from pioneer_interfaces.msg import ClusterInfo
 
 from .joy_cmd_base import JoyCmdBase
-from .gui_base import StatusWindowBase
+from .gui_base import StatusWindowBase, setup_signal_handlers
 from .constants import DEFAULT_QOS
 
 
@@ -153,24 +153,31 @@ class StatusWindow3Robot(StatusWindowBase):
 def main(args=None):
     """Main entry point with GUI."""
     rclpy.init(args=args)
-    
+
     # Create node
     node = JoyCmd3Robot()
-    
+
     # Create Qt application
     app = QApplication(sys.argv)
     gui = StatusWindow3Robot(node)
     gui.show()
-    
+
+    # Setup signal handlers for graceful shutdown (Ctrl+C)
+    signal_timer = setup_signal_handlers(gui)
+
     # Setup ROS spinning timer
     ros_timer = QTimer()
     ros_timer.timeout.connect(lambda: rclpy.spin_once(node, timeout_sec=0.01))
     ros_timer.start(10)  # 100Hz
-    
+
     # Run application
     try:
         exit_code = app.exec()
     finally:
+        # Clean up timers
+        ros_timer.stop()
+        signal_timer.stop()
+        # Destroy node
         node.destroy_node()
         rclpy.shutdown()
         sys.exit(exit_code)

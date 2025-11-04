@@ -9,7 +9,7 @@ from geometry_msgs.msg import Pose2D
 from std_msgs.msg import Int16, Float64
 from rf_sim_interfaces.srv import GetRxPower
 
-from .my_ros_module import PubSubManager
+from gui_package.my_ros_module import PubSubManager
 
 UPDATE_RATE = 0.1
 VEL_ALIVE = 10

@@ -10,7 +10,7 @@ from std_msgs.msg import Int16
 import datetime
 import os
 
-from .my_ros_module import PubSubManager
+from gui_package.my_ros_module import PubSubManager
 
 
 class SensorReceiver(Node):

@@ -7,7 +7,7 @@ from .ScalarGradient import ScalarGradient, ControlMode
 from std_msgs.msg import Bool, Int16, String, Float32MultiArray, Float64
 from geometry_msgs.msg import Twist
 from geometry_msgs.msg import Pose2D
-from teleop_core.my_ros_module import PubSubManager
+from gui_package.my_ros_module import PubSubManager
 from rf_sim_interfaces.srv import GetRxPower
 
 """

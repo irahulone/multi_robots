@@ -6,7 +6,7 @@ from geometry_msgs.msg import Twist
 from std_msgs.msg import Bool, Int16, String
 from typing import List, Optional
 
-from .my_ros_module import PubSubManager
+from gui_package.my_ros_module import PubSubManager
 from .constants import (
     RoverMode, DEFAULT_QOS, MAX_VEL_TRANS, MAX_VEL_ROT,
     DEFAULT_ROBOT_ID_PREFIX
