@@ -32,9 +32,6 @@ class PoseResetForwarder(Node):
         forward_msg.theta = msg.theta
 
         self._publisher.publish(forward_msg)
-        self._sent = True
-        self.get_logger().info('Forwarded Pose2D once; shutting down')
-        rclpy.shutdown()
 
 
 def main(args=None) -> None:
