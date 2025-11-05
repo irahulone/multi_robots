@@ -3,9 +3,9 @@
 import sys
 import math
 import rclpy
-from PyQt6.QtWidgets import QApplication, QVBoxLayout, QLabel, QDoubleSpinBox
+from PyQt6.QtWidgets import QApplication, QVBoxLayout, QLabel, QDoubleSpinBox, QCheckBox
 from PyQt6.QtCore import QTimer
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float32MultiArray, Bool
 from pioneer_interfaces.msg import ClusterInfo
 
 from .joy_cmd_base import JoyCmdBase
@@ -24,8 +24,11 @@ class JoyCmd3Robot(JoyCmdBase):
         self.cluster_q: float = 10.0
         self.cluster_b: float = math.pi / 3
         
+        self.pioneer_hw = [False, False, False]
+        
         self._setup_additional_publishers()
         self._setup_additional_subscriptions()
+        self.additional_timer = self.create_timer(0.1, self._publish_pioneer_hw)
         
     def _setup_additional_publishers(self) -> None:
         """Setup additional publishers for cluster control."""
@@ -33,6 +36,9 @@ class JoyCmd3Robot(JoyCmdBase):
             Float32MultiArray, '/cluster_params', DEFAULT_QOS)
         self.pubsub.create_publisher(
             Float32MultiArray, '/cluster_desired', DEFAULT_QOS)
+        for i in range(3):
+            self.pubsub.create_publisher(
+                Bool, f'/p{i+1}/hardware', DEFAULT_QOS)
             
     def _setup_additional_subscriptions(self) -> None:
         """Setup additional subscriptions."""
@@ -71,6 +77,13 @@ class JoyCmd3Robot(JoyCmdBase):
             self.get_logger().info("[HIDDEN COMMAND] -RESET CLUSTER PARAMS-")
             reset_msg = Float32MultiArray(data=[-1.0, -1.0, -1.0])
             self.pubsub.publish('/cluster_params', reset_msg)
+            
+    def _publish_pioneer_hw(self) -> None:
+        """Publish pioneer hardware mode selections."""
+        for i in range(3):
+            msg = Bool()
+            msg.data = self.pioneer_hw[i]
+            self.pubsub.publish(f'/p{i+1}/hardware', msg)
 
 
 class StatusWindow3Robot(StatusWindowBase):
@@ -92,6 +105,12 @@ class StatusWindow3Robot(StatusWindowBase):
             
     def _add_custom_controls(self, layout: QVBoxLayout) -> None:
         """Add 3-robot specific control widgets."""
+        for n in range(3):
+            hw_checkbox = QCheckBox(f"p{n+1} Hardware Mode")
+            hw_checkbox.setChecked(self.node.pioneer_hw[n])
+            hw_checkbox.toggled.connect(
+                lambda checked, idx=n: self.update_pioneer_hw(checked, idx))
+            layout.addWidget(hw_checkbox)
         # P parameter
         self.p_spin = QDoubleSpinBox()
         self.p_spin.setMinimum(0.0)
@@ -142,6 +161,10 @@ class StatusWindow3Robot(StatusWindowBase):
         """Update cluster B parameter."""
         self.node.cluster_b = value
         self._publish_cluster_params()
+    
+    def update_pioneer_hw(self, checked: bool, n) -> None:
+        """Update pioneer hardware mode."""
+        self.node.pioneer_hw[n] = checked
         
     def _publish_cluster_params(self) -> None:
         """Publish cluster parameters."""

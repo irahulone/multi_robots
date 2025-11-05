@@ -14,18 +14,14 @@ class PoseResetForwarder(Node):
         pose_topic = f'/{self.robot_id}/pose2D'
         reset_topic = f'/sim/{self.robot_id}/reset_pose2D'
 
-        self._sent = False
         self._publisher = self.create_publisher(Pose2D, reset_topic, 10)
         self.create_subscription(Pose2D, pose_topic, self.pose_callback, 10)
 
         self.get_logger().info(
-            f'Waiting for Pose2D on {pose_topic}; forwarding first message to {reset_topic}'
+            f'Forwarding Pose2D messages from {pose_topic} to {reset_topic}'
         )
 
     def pose_callback(self, msg: Pose2D) -> None:
-        if self._sent:
-            return
-
         forward_msg = Pose2D()
         forward_msg.x = msg.x
         forward_msg.y = msg.y
