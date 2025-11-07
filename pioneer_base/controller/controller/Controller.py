@@ -455,8 +455,19 @@ class Controller(Node):
         """Compute individual robot commands and publish them"""
         rover_commands = []
         
+        desired_positions = self.cluster.get_desired_robot_positions(self.c_des)
+
         # Due to non-holonomic constraints we need to convert x,y velocities to linear/angular velocities
         for i in range(len(cluster_robots)):
+            if hasattr(desired_positions, 'shape') and len(desired_positions.shape) == 2:
+                _x = float(desired_positions[i*ROVER_DOF, 0])
+                _y = float(desired_positions[i*ROVER_DOF + 1, 0])
+            else:
+                _x = float(desired_positions[i*ROVER_DOF])
+                _y = float(desired_positions[i*ROVER_DOF + 1])
+            if math.sqrt((_x-robot_positions[i*ROVER_DOF,0])**2 + (_y-robot_positions[i*ROVER_DOF+1,0])**2) < EPSILON:
+                rover_commands.append([0.0, 0.0])
+                continue
             x_vel = float(rdot_des[i * ROVER_DOF + 0, 0])
             y_vel = float(rdot_des[i * ROVER_DOF + 1, 0])
             current_theta = robot_positions[i * ROVER_DOF + 2, 0]

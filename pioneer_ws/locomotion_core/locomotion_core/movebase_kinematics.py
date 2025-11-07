@@ -22,7 +22,11 @@ class GetMoveCmds(Node):
                 ('max_vel', 50),
                 ('max_vel_open', 600),
                 ('left_motor_sign', -1),  # Motor direction signs
-                ('right_motor_sign', 1)
+                ('right_motor_sign', 1),
+                ('left_trans_gain', 1.0),
+                ('right_trans_gain', 1.0),
+                ('left_rotate_gain', 1.5),
+                ('right_rotate_gain', 1.5),
             ]
         )
         
@@ -32,6 +36,10 @@ class GetMoveCmds(Node):
         self.max_vel_open = self.get_parameter('max_vel_open').get_parameter_value().integer_value
         self.left_motor_sign = self.get_parameter('left_motor_sign').get_parameter_value().integer_value
         self.right_motor_sign = self.get_parameter('right_motor_sign').get_parameter_value().integer_value
+        self.left_trans_gain = self.get_parameter('left_trans_gain').get_parameter_value().double_value
+        self.right_trans_gain = self.get_parameter('right_trans_gain').get_parameter_value().double_value
+        self.left_rotate_gain = self.get_parameter('left_rotate_gain').get_parameter_value().double_value
+        self.right_rotate_gain = self.get_parameter('right_rotate_gain').get_parameter_value().double_value
         
         # Validate motor signs
         if self.left_motor_sign not in [-1, 1]:
@@ -75,8 +83,8 @@ class GetMoveCmds(Node):
 
         # Calculate control signals based on 'linear_x' and 'angular_z' values 
         # Apply motor direction signs from configuration
-        vel_left  = self.left_motor_sign * int(self.max_vel * (lx - az))
-        vel_right = self.right_motor_sign * int(self.max_vel * (lx + az))
+        vel_left  = self.left_motor_sign * int(self.max_vel * (self.left_trans_gain * lx - self.left_rotate_gain * az))
+        vel_right = self.right_motor_sign * int(self.max_vel * (self.right_trans_gain * lx + self.right_rotate_gain * az))
 
         # Construct payload with left & right velocities 
         payload = Int32MultiArray()
