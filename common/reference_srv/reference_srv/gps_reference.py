@@ -5,6 +5,7 @@ from pioneer_interfaces.srv import RefGPS
 # ref_gps_jacobs_farm = [-121.839521, 37.260894]
 # ref_gps_garage = [-121.94158, 37.35232]
 # ref_gps_bellomy_field = [-121.93412, 37.347415]
+# ref_gps_guadalupe_lot = [ -121.93323153341677, 37.350472934712315]
 
 class GPSReferenceServer(Node):
     def __init__(self):

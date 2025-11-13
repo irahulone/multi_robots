@@ -16,7 +16,7 @@ FREQ = 10
 JOY_FREQ = FREQ # Frequency for joystick commands
 KP_GAIN = 1.0  # Position gain in m/s per m error
 KV_GAIN = 0.2  # Velocity gain in m/s per m/s error
-EPSILON = 0.5  # Distance threshold to consider robot at desired position in meters
+EPSILON = 5  # Distance threshold to consider robot at desired position in meters
 MAX_VEL = 3.0  # Maximum linear+angular velocity in m/s
 ROVER_DOF = 3  # (x, y, theta)
 
@@ -57,7 +57,7 @@ class Controller(Node):
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('robot_id_list', ["p1", "p2", "p3"]),
+                ('robot_id_list', ["p2", "p3", "p4"]),
                 ('cluster_size', 3),
                 ('cluster_params', [8.0, 8.0, 1.047]), 
                 ('cluster_type', "TriangleatCentroid"),
@@ -455,8 +455,19 @@ class Controller(Node):
         """Compute individual robot commands and publish them"""
         rover_commands = []
         
+        desired_positions = self.cluster.get_desired_robot_positions(self.c_des)
+
         # Due to non-holonomic constraints we need to convert x,y velocities to linear/angular velocities
         for i in range(len(cluster_robots)):
+            if hasattr(desired_positions, 'shape') and len(desired_positions.shape) == 2:
+                _x = float(desired_positions[i*ROVER_DOF, 0])
+                _y = float(desired_positions[i*ROVER_DOF + 1, 0])
+            else:
+                _x = float(desired_positions[i*ROVER_DOF])
+                _y = float(desired_positions[i*ROVER_DOF + 1])
+            if math.sqrt((_x-robot_positions[i*ROVER_DOF,0])**2 + (_y-robot_positions[i*ROVER_DOF+1,0])**2) < EPSILON:
+                rover_commands.append([0.0, 0.0])
+                continue
             x_vel = float(rdot_des[i * ROVER_DOF + 0, 0])
             y_vel = float(rdot_des[i * ROVER_DOF + 1, 0])
             current_theta = robot_positions[i * ROVER_DOF + 2, 0]

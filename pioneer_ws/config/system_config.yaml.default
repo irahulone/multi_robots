@@ -55,6 +55,11 @@ locomotion:
   # Motor direction configuration - adjust these values based on electrical connections
   left_motor_sign: 1   # -1 or 1 to invert left motor direction
   right_motor_sign: 1   # -1 or 1 to invert right motor direction
+  # Gain tuning for translational and rotational commands
+  left_trans_gain: 1.0
+  right_trans_gain: 1.0
+  left_rotate_gain: 1.5
+  right_rotate_gain: 1.5
   # Battery monitoring configuration
   battery_monitoring:
     enabled: true  # Enable battery voltage monitoring

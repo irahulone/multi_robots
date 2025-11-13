@@ -243,6 +243,10 @@ LOCOMOTION_SERIAL_PORT=$(read_yaml "$CONFIG_FILE" "locomotion.serial_port")
 LOCOMOTION_BAUDRATE=$(read_yaml "$CONFIG_FILE" "locomotion.baudrate")
 LOCOMOTION_LEFT_MOTOR_SIGN=$(read_yaml "$CONFIG_FILE" "locomotion.left_motor_sign")
 LOCOMOTION_RIGHT_MOTOR_SIGN=$(read_yaml "$CONFIG_FILE" "locomotion.right_motor_sign")
+LOCOMOTION_LEFT_TRANS_GAIN=$(read_yaml "$CONFIG_FILE" "locomotion.left_trans_gain" || echo "1.0")
+LOCOMOTION_RIGHT_TRANS_GAIN=$(read_yaml "$CONFIG_FILE" "locomotion.right_trans_gain" || echo "1.0")
+LOCOMOTION_LEFT_ROTATE_GAIN=$(read_yaml "$CONFIG_FILE" "locomotion.left_rotate_gain" || echo "1.5")
+LOCOMOTION_RIGHT_ROTATE_GAIN=$(read_yaml "$CONFIG_FILE" "locomotion.right_rotate_gain" || echo "1.5")
 
 # Read Battery monitoring configuration
 BATTERY_ENABLED=$(read_yaml "$CONFIG_FILE" "locomotion.battery_monitoring.enabled" || echo "true")
@@ -341,6 +345,10 @@ ${ROBOT_ID}_movebase_kinematics:
     max_vel_open: $LOCOMOTION_MAX_VEL_OPEN
     left_motor_sign: $LOCOMOTION_LEFT_MOTOR_SIGN
     right_motor_sign: $LOCOMOTION_RIGHT_MOTOR_SIGN
+    left_trans_gain: $LOCOMOTION_LEFT_TRANS_GAIN
+    right_trans_gain: $LOCOMOTION_RIGHT_TRANS_GAIN
+    left_rotate_gain: $LOCOMOTION_LEFT_ROTATE_GAIN
+    right_rotate_gain: $LOCOMOTION_RIGHT_ROTATE_GAIN
     
 ${ROBOT_ID}_cmd_roboteq:
   ros__parameters:
