@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'run_gps1 = gps_core.run_gps:main',
+            'run_gps_ublox = gps_core.run_gps_ublox:main',
         ],
     },
 )

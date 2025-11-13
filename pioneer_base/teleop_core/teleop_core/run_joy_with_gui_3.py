@@ -24,7 +24,7 @@ class JoyCmd3Robot(JoyCmdBase):
         self.cluster_q: float = 10.0
         self.cluster_b: float = math.pi / 3
         
-        self.pioneer_hw = [False, False, False]
+        self.pioneer_hw = [False, False, False, False, False]
         
         self._setup_additional_publishers()
         self._setup_additional_subscriptions()
@@ -36,7 +36,7 @@ class JoyCmd3Robot(JoyCmdBase):
             Float32MultiArray, '/cluster_params', DEFAULT_QOS)
         self.pubsub.create_publisher(
             Float32MultiArray, '/cluster_desired', DEFAULT_QOS)
-        for i in range(3):
+        for i in range(5):
             self.pubsub.create_publisher(
                 Bool, f'/p{i+1}/hardware', DEFAULT_QOS)
             
@@ -80,7 +80,7 @@ class JoyCmd3Robot(JoyCmdBase):
             
     def _publish_pioneer_hw(self) -> None:
         """Publish pioneer hardware mode selections."""
-        for i in range(3):
+        for i in range(5):
             msg = Bool()
             msg.data = self.pioneer_hw[i]
             self.pubsub.publish(f'/p{i+1}/hardware', msg)
@@ -105,7 +105,7 @@ class StatusWindow3Robot(StatusWindowBase):
             
     def _add_custom_controls(self, layout: QVBoxLayout) -> None:
         """Add 3-robot specific control widgets."""
-        for n in range(3):
+        for n in range(5):
             hw_checkbox = QCheckBox(f"p{n+1} Hardware Mode")
             hw_checkbox.setChecked(self.node.pioneer_hw[n])
             hw_checkbox.toggled.connect(
