@@ -1,0 +1,97 @@
+# Central configuration file for Pioneer ROS system
+# Modify this file for different robots/users
+
+# Robot identification
+robot:
+  id: "p2"  # Change this for each robot (p1, p2, p3, etc.)
+  
+# User configuration
+user:
+  name: "pioneer-ii"  # Change this for each user
+  home_dir: "/home/pioneer-ii"  # Change this for each user
+
+# GPS configuration
+gps:
+  device_paths:
+    - "/dev/gps"
+  baudrate: 9600
+  timeout: 10
+  moving_average_rate: 0.2
+  connection_timeout: 10.0  # seconds
+  retry_delay: 2.0
+  update_rate: 10.0  # Hz - GPS module update rate
+  timer_period: 0.1  # seconds - ROS timer period (1.0 = 1Hz)
+
+# IMU configuration  
+imu:
+  heading_offset: 0  # degrees
+  connection_timeout: 10.0  # seconds
+  retry_delay: 2.0
+  calibration_file: "imu_calib/bno055_offsets.json"  # Relative to user home
+  # Advanced options
+  publish_rate: 20.0  # Hz for IMU data publishing
+  enable_extended_output: true  # Enable extended sensor data outputs (magnetic field, gravity, etc.)
+  enable_legacy_compatibility: true  # Enable legacy message formats for backward compatibility
+
+# RF Receiver configuration
+rf_receiver:
+  device_paths:
+    - "/dev/xbee"
+  baudrate: 115200
+  retry_delay: 2.0 # seconds
+  retry_attempts: 5 # Number of connections attempts per device_path entry
+  update_rate: 2.0 # Hz - RF Receiver module update rate
+  timer_period: 2.0 # seconds - ROS timer
+  pub_topic: "rssi"
+  moving_average_rate: 0.15
+
+# Locomotion configuration
+locomotion:
+  max_velocity: 1000  # Normal operation
+  max_velocity_open: 1000  # Open loop operation
+  serial_port: "/dev/ttyACM0"
+  baudrate: 115200
+  # Motor direction configuration - adjust these values based on electrical connections
+  left_motor_sign: -1   # -1 or 1 to invert left motor direction
+  right_motor_sign: 1   # -1 or 1 to invert right motor direction
+  # Gain tuning for translational and rotational commands
+  left_trans_gain: 1.0
+  right_trans_gain: 1.0
+  left_rotate_gain: 1.5
+  right_rotate_gain: 1.5
+  # Battery monitoring configuration
+  battery_monitoring:
+    enabled: false  # Enable battery voltage monitoring
+    update_interval: 1.0  # seconds - Battery voltage check interval
+
+# Pose converter configuration
+pose_converter:
+  timer_period: 0.1  # seconds
+  health_check_period: 1.0  # seconds
+  reset_timeout: 5.0  # seconds
+  publish_diagnostics: true  # Publish diagnostics information
+
+# System monitoring
+monitoring:
+  sensor_timeout: 5.0  # seconds
+  max_node_retries: 3
+  node_restart_delay: 5.0  # seconds
+
+# Launch configuration
+launch:
+  sensor_nodes:
+    - run_gps_ublox
+    - run_imu
+  driver_nodes:
+    - movebase_kinematics  
+    - cmd_roboteq
+  converter_nodes:
+    - converter
+
+# Service configuration
+service:
+  name: "ros2_start"
+  description: "ROS 2 Auto Start"
+  working_directory: "ros2_ws"
+  startup_script: "pioneer_ws/scripts/start_ros2.sh"
+  restart_policy: "always"
