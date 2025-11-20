@@ -30,7 +30,7 @@ class ANNode(Node):
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('robot_id_list', ["p2", "p3", "p4"]),
+                ('robot_id_list', ["p1", "p2", "p3"]),
             ]
         )
         params = self._parameters

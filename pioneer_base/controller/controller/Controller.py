@@ -57,7 +57,7 @@ class Controller(Node):
         self.declare_parameters(
             namespace='',
             parameters=[
-                ('robot_id_list', ["p2", "p3", "p4"]),
+                ('robot_id_list', ["p1", "p2", "p3"]),
                 ('cluster_size', 3),
                 ('cluster_params', [8.0, 8.0, 1.047]), 
                 ('cluster_type', "TriangleatCentroid"),
