@@ -66,6 +66,9 @@ setup_udev_rules() {
 # udev rules for GPS device (Ublox)
 SUBSYSTEM=="tty", ATTRS{idVendor}=="1546", ATTRS{idProduct}=="01a9", SYMLINK+="gps", MODE="0666"
 
+# udev rules for Roboteq motor controllers
+SUBSYSTEM=="tty", ATTRS{idVendor}=="20d2", ATTRS{idProduct}=="5740", SYMLINK+="roboteq", MODE="0666"
+
 
 # udev rule for XBee RF module
 SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", SYMLINK+="xbee", MODE="0666"
@@ -183,6 +186,8 @@ while true; do
     fi
     device_count=$((device_count + 1))
 done
+
+python gps_core/gps_core/configure_gnss.py /dev/gps 115200
 
 # Default device paths if none specified
 if [ -z "$GPS_DEVICE_PATHS" ]; then

@@ -14,13 +14,13 @@ user:
 gps:
   device_paths:
     - "/dev/usb"
-  baudrate: 9600
+  baudrate: 115200
   timeout: 10
   moving_average_rate: 0.2
   connection_timeout: 10.0  # seconds
   retry_delay: 2.0
-  update_rate: 1.0  # Hz - GPS module update rate
-  timer_period: 1.0  # seconds - ROS timer period (1.0 = 1Hz)
+  update_rate: 10.0  # Hz - GPS module update rate
+  timer_period: 0.1  # seconds - ROS timer period (1.0 = 1Hz)
 
 # IMU configuration  
 imu:
@@ -50,7 +50,7 @@ rf_receiver:
 locomotion:
   max_velocity: 176  # Normal operation
   max_velocity_open: 600  # Open loop operation
-  serial_port: "/dev/ttyACM0"
+  serial_port: "/dev/roboteq"
   baudrate: 115200
   # Motor direction configuration - adjust these values based on electrical connections
   left_motor_sign: 1   # -1 or 1 to invert left motor direction
