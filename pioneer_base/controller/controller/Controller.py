@@ -297,26 +297,21 @@ class Controller(Node):
         if self.mode == "NAV_M" or self.mode == "ADPTV_NAV_M": #only update cluster if in navigation mode
             try:
                 if self.cluster.control_mode == ControlMode.POSITION:
-                        # Update desired cluster position based on joystick input
-                        v_x = -msg.linear.x
-                        v_y = msg.linear.y
-                        v_r = -msg.angular.z * 0.3
-                        
-                        self.c_des[0, 0] += v_x / freq
-                        self.c_des[1, 0] += v_y / freq
-                        self.c_des[2, 0] += v_r / freq
-                        self.c_des[2, 0] = self._wrap_to_pi(self.c_des[2, 0])
-                        
-                        #self.get_logger().info(f"Cluster desired position: {self.c_des.flatten()}")
+                    # Update desired cluster position based on joystick input
+                    v_x = -msg.linear.x
+                    v_y = msg.linear.y
+                    v_r = -msg.angular.z * 0.3
+                    
+                    self.c_des[0, 0] += v_x / freq
+                    self.c_des[1, 0] += v_y / freq
+                    self.c_des[2, 0] += v_r / freq
+                    self.c_des[2, 0] = self._wrap_to_pi(self.c_des[2, 0])
+                    
+                    #self.get_logger().info(f"Cluster desired position: {self.c_des.flatten()}")
                 elif self.cluster.control_mode == ControlMode.VELOCITY:
-                    if self.output == "actual":
-                        self.cdot_des[0, 0] = -msg.linear.x
-                        self.cdot_des[1, 0] = msg.linear.y
-                        self.cdot_des[2, 0] = self._wrap_to_pi(-msg.angular.z * 0.3)
-                    elif self.output == "sim":
-                        self.sim_cdot_des[0, 0] = -msg.linear.x
-                        self.sim_cdot_des[1, 0] = msg.linear.y
-                        self.sim_cdot_des[2, 0] = self._wrap_to_pi(-msg.angular.z * 0.3)
+                    self.cdot_des[0, 0] = -msg.linear.x
+                    self.cdot_des[1, 0] = msg.linear.y
+                    self.cdot_des[2, 0] = self._wrap_to_pi(-msg.angular.z * 0.3)
             except Exception as e:
                 self.get_logger().error(f"Error in _cmd_callback: {e}")
 
@@ -465,7 +460,7 @@ class Controller(Node):
             else:
                 _x = float(desired_positions[i*ROVER_DOF])
                 _y = float(desired_positions[i*ROVER_DOF + 1])
-            if math.sqrt((_x-robot_positions[i*ROVER_DOF,0])**2 + (_y-robot_positions[i*ROVER_DOF+1,0])**2) < EPSILON:
+            if self.cluster.control_mode == ControlMode.POSITION and math.sqrt((_x-robot_positions[i*ROVER_DOF,0])**2 + (_y-robot_positions[i*ROVER_DOF+1,0])**2) < EPSILON:
                 rover_commands.append([0.0, 0.0])
                 continue
             x_vel = float(rdot_des[i * ROVER_DOF + 0, 0])
