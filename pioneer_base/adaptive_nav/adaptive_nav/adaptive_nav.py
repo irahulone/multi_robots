@@ -133,6 +133,7 @@ class ANNode(Node):
             return
         else:
             self.get_logger().info(f"Publishing bearing: {bearing} for output: {output}")
+            self.get_logger().info(f"{output}/ Robot positions: {self.gradient.robot_positions if output == 'actual' else self.sim_gradient.robot_positions}")
         _msg.linear.x = math.cos(bearing) * KV
         _msg.linear.y = math.sin(bearing) * KV
         self.pubsub.publish('/ctrl/cmd_vel', _msg) #publish velocity command to cluster
