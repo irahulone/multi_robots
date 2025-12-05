@@ -12,160 +12,204 @@ import serial
 import time
 import sys
 
-def configure_gnss(port='/dev/gps', baudrate=115200):
-    """Configure GNSS constellations: GPS + Galileo only"""
-    
-    print(f"Connecting to {port} at {baudrate} baud...")
-    
+
+def wait_for_ack(ser, msg_class, msg_id, timeout=3.0):
+    """
+    Wait for ACK-ACK or ACK-NAK response from u-blox module.
+
+    Args:
+        ser: Serial port object
+        msg_class: UBX message class (e.g., 0x06 for CFG)
+        msg_id: UBX message ID
+        timeout: Timeout in seconds
+
+    Returns:
+        True if ACK received, False if NAK received, None if timeout
+    """
+    ubr = UBXReader(ser)
+    start = time.time()
+    while time.time() - start < timeout:
+        if ser.in_waiting:
+            try:
+                raw, parsed = ubr.read()
+                if parsed:
+                    if parsed.identity == 'ACK-ACK':
+                        if parsed.clsID == msg_class and parsed.msgID == msg_id:
+                            return True
+                    elif parsed.identity == 'ACK-NAK':
+                        if parsed.clsID == msg_class and parsed.msgID == msg_id:
+                            return False
+            except Exception:
+                pass
+        time.sleep(0.01)
+    return None
+
+
+def configure_measurement_rate(ser, rate_hz=10):
+    """
+    Configure measurement rate with ACK verification.
+
+    Args:
+        ser: Serial port object
+        rate_hz: Measurement rate in Hz
+
+    Returns:
+        True if ACK, False if NAK, None if timeout
+    """
+    meas_rate_ms = int(1000 / rate_hz)
+    msg = UBXMessage('CFG', 'CFG-RATE', SET,
+                     measRate=meas_rate_ms,
+                     navRate=1,
+                     timeRef=0)
+    ser.reset_input_buffer()
+    ser.write(msg.serialize())
+
+    # CFG-RATE: class=0x06, id=0x08
+    return wait_for_ack(ser, 0x06, 0x08)
+
+
+def configure_gnss_constellations(ser):
+    """
+    Configure GNSS constellations (GPS + Galileo only).
+
+    Args:
+        ser: Serial port object
+
+    Returns:
+        True if ACK, False if NAK, None if timeout
+    """
+    gnss_blocks = []
+
+    # GPS (gnssId=0): Enable, 8-16 channels
+    gnss_blocks.extend([0, 8, 16, 0, 0x01, 0x00, 0x01, 0x01])
+    # SBAS (gnssId=1): Disable
+    gnss_blocks.extend([1, 1, 3, 0, 0x00, 0x00, 0x01, 0x01])
+    # Galileo (gnssId=2): Enable, 4-8 channels
+    gnss_blocks.extend([2, 4, 8, 0, 0x01, 0x00, 0x01, 0x01])
+    # BeiDou (gnssId=3): Disable
+    gnss_blocks.extend([3, 2, 16, 0, 0x00, 0x00, 0x01, 0x01])
+    # QZSS (gnssId=5): Disable
+    gnss_blocks.extend([5, 0, 3, 0, 0x00, 0x00, 0x05, 0x01])
+    # GLONASS (gnssId=6): Disable
+    gnss_blocks.extend([6, 8, 14, 0, 0x00, 0x00, 0x01, 0x01])
+
+    payload = bytes([0, 0, 32, 6]) + bytes(gnss_blocks)
+
+    # Calculate checksum
+    ck_a, ck_b = 0, 0
+    msg_data = bytes([0x06, 0x3E]) + len(payload).to_bytes(2, 'little') + payload
+    for byte in msg_data:
+        ck_a = (ck_a + byte) & 0xFF
+        ck_b = (ck_b + ck_a) & 0xFF
+
+    full_msg = bytes([0xB5, 0x62]) + msg_data + bytes([ck_a, ck_b])
+
+    ser.reset_input_buffer()
+    ser.write(full_msg)
+
+    # CFG-GNSS: class=0x06, id=0x3E
+    return wait_for_ack(ser, 0x06, 0x3E)
+
+
+def save_configuration(ser):
+    """
+    Save configuration to flash memory.
+
+    Args:
+        ser: Serial port object
+
+    Returns:
+        True if ACK, False if NAK, None if timeout
+    """
+    msg = UBXMessage('CFG', 'CFG-CFG', SET,
+                     clearMask=b'\x00\x00\x00\x00',
+                     saveMask=b'\x1F\x1F\x00\x00',
+                     loadMask=b'\x00\x00\x00\x00')
+    ser.reset_input_buffer()
+    ser.write(msg.serialize())
+
+    # CFG-CFG: class=0x06, id=0x09
+    return wait_for_ack(ser, 0x06, 0x09)
+
+
+def configure_gnss(port='/dev/gps', baudrate=115200, logger=None):
+    """
+    Configure ZED-F9P GNSS module with ACK verification.
+
+    Args:
+        port: Serial port path
+        baudrate: Baud rate
+        logger: ROS2 logger (optional, uses print if None)
+
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    def log_info(msg):
+        if logger:
+            logger.info(msg)
+        else:
+            print(msg)
+
+    def log_warn(msg):
+        if logger:
+            logger.warn(msg)
+        else:
+            print(f"WARN: {msg}")
+
+    def log_error(msg):
+        if logger:
+            logger.error(msg)
+        else:
+            print(f"ERROR: {msg}")
+
     try:
         ser = serial.Serial(port, baudrate=baudrate, timeout=1)
-        print("Connected successfully")
-        
-        # Clear input buffer
         ser.reset_input_buffer()
         time.sleep(0.5)
-        
-        print("\nConfiguring measurement rate to 10Hz...")
-        msg_rate = UBXMessage('CFG', 'CFG-RATE', SET,
-                            measRate=100,  # 100ms = 10Hz
-                            navRate=1,
-                            timeRef=0)
-        ser.write(msg_rate.serialize())
-        time.sleep(0.3)
-        print("✓ Measurement rate set to 10Hz (100ms)")
-        
-        print("\nConfiguring GNSS constellations...")
-        print("This will enable GPS and Galileo, disable all others")
-        
-        # CFG-GNSS: Configure all GNSS systems at once
-        # For ZED-F9P, we need to configure the complete GNSS setup
-        
-        # Build GNSS configuration blocks
-        # Format: gnssId, resTrkCh, maxTrkCh, reserved1, flags (4 bytes)
-        
-        gnss_blocks = []
-        
-        # GPS (gnssId=0): Enable, 8-16 channels
-        gnss_blocks.extend([
-            0,      # gnssId: GPS
-            8,      # resTrkCh: reserved tracking channels
-            16,     # maxTrkCh: maximum tracking channels
-            0,      # reserved
-            0x01, 0x00, 0x01, 0x01  # flags: enable=1, sigCfgMask for L1C/A
-        ])
-        
-        # SBAS (gnssId=1): Disable
-        gnss_blocks.extend([
-            1,      # gnssId: SBAS
-            1,      # resTrkCh
-            3,      # maxTrkCh
-            0,      # reserved
-            0x00, 0x00, 0x01, 0x01  # flags: enable=0
-        ])
-        
-        # Galileo (gnssId=2): Enable, 4-8 channels
-        gnss_blocks.extend([
-            2,      # gnssId: Galileo
-            4,      # resTrkCh
-            8,      # maxTrkCh
-            0,      # reserved
-            0x01, 0x00, 0x01, 0x01  # flags: enable=1, sigCfgMask for E1
-        ])
-        
-        # BeiDou (gnssId=3): Disable
-        gnss_blocks.extend([
-            3,      # gnssId: BeiDou
-            2,      # resTrkCh
-            16,     # maxTrkCh
-            0,      # reserved
-            0x00, 0x00, 0x01, 0x01  # flags: enable=0
-        ])
-        
-        # QZSS (gnssId=5): Disable
-        gnss_blocks.extend([
-            5,      # gnssId: QZSS
-            0,      # resTrkCh
-            3,      # maxTrkCh
-            0,      # reserved
-            0x00, 0x00, 0x05, 0x01  # flags: enable=0
-        ])
-        
-        # GLONASS (gnssId=6): Disable
-        gnss_blocks.extend([
-            6,      # gnssId: GLONASS
-            8,      # resTrkCh
-            14,     # maxTrkCh
-            0,      # reserved
-            0x00, 0x00, 0x01, 0x01  # flags: enable=0
-        ])
-        
-        # Create CFG-GNSS message
-        # Note: pyubx2 expects specific parameter names for CFG-GNSS
-        # We'll send raw bytes instead
-        
-        # UBX header: 0xB5 0x62
-        # Class: 0x06 (CFG)
-        # ID: 0x3E (GNSS)
-        # Length: variable
-        
-        payload = bytes([
-            0,      # msgVer
-            0,      # numTrkChHw (0 = read-only)
-            32,     # numTrkChUse (max tracking channels to use)
-            6,      # numConfigBlocks
-        ]) + bytes(gnss_blocks)
-        
-        # Calculate checksum
-        ck_a = 0
-        ck_b = 0
-        msg_data = bytes([0x06, 0x3E]) + len(payload).to_bytes(2, 'little') + payload
-        
-        for byte in msg_data:
-            ck_a = (ck_a + byte) & 0xFF
-            ck_b = (ck_b + ck_a) & 0xFF
-        
-        full_msg = bytes([0xB5, 0x62]) + msg_data + bytes([ck_a, ck_b])
-        
-        print("Sending GNSS configuration...")
-        ser.write(full_msg)
-        time.sleep(1.0)
-        
-        print("GNSS configuration sent successfully")
-        
-        # Save configuration to flash
-        print("\nSaving configuration to flash memory...")
-        msg_save = UBXMessage('CFG', 'CFG-CFG', SET,
-                            clearMask=b'\x00\x00\x00\x00',
-                            saveMask=b'\x1F\x1F\x00\x00',
-                            loadMask=b'\x00\x00\x00\x00')
-        ser.write(msg_save.serialize())
-        time.sleep(1.0)
-        
-        print("Configuration saved successfully!")
-        print("\nGNSS Configuration Complete:")
-        print("  ✓ Measurement Rate: 10Hz (100ms)")
-        print("  ✓ GPS: ENABLED (8-16 channels)")
-        print("  ✓ Galileo: ENABLED (4-8 channels)")
-        print("  ✗ GLONASS: DISABLED")
-        print("  ✗ BeiDou: DISABLED")
-        print("  ✗ QZSS: DISABLED")
-        print("  ✗ SBAS: DISABLED")
-        print("\nSettings have been saved to flash memory.")
-        print("You can now use the main GPS node.")
-        
+
+        # 1. Configure measurement rate
+        log_info("Configuring measurement rate to 10Hz...")
+        ack = configure_measurement_rate(ser, rate_hz=10)
+        if ack is True:
+            log_info("CFG-RATE: ACK received")
+        elif ack is False:
+            log_warn("CFG-RATE: NAK received - configuration rejected")
+        else:
+            log_warn("CFG-RATE: No response (timeout)")
+
+        # 2. Configure GNSS constellations
+        log_info("Configuring GNSS constellations (GPS + Galileo)...")
+        ack = configure_gnss_constellations(ser)
+        if ack is True:
+            log_info("CFG-GNSS: ACK received")
+        elif ack is False:
+            log_warn("CFG-GNSS: NAK received - configuration rejected")
+        else:
+            log_warn("CFG-GNSS: No response (timeout)")
+
+        # 3. Save configuration to flash
+        log_info("Saving configuration to flash...")
+        ack = save_configuration(ser)
+        if ack is True:
+            log_info("CFG-CFG: ACK received - configuration saved")
+        elif ack is False:
+            log_error("CFG-CFG: NAK received - save failed")
+            ser.close()
+            return False, "Failed to save configuration"
+        else:
+            log_warn("CFG-CFG: No response (timeout)")
+
         ser.close()
-        return True
-        
+        return True, "Configuration completed"
+
     except Exception as e:
-        print(f"\nError: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        return False, str(e)
+
 
 if __name__ == '__main__':
     port = sys.argv[1] if len(sys.argv) > 1 else '/dev/gps'
     baudrate = int(sys.argv[2]) if len(sys.argv) > 2 else 115200
-    
+
     print("=" * 60)
     print("ZED-F9P GNSS Configuration Utility")
     print("Configures: 10Hz rate + GPS + Galileo")
@@ -173,7 +217,21 @@ if __name__ == '__main__':
     print(f"Port: {port}")
     print(f"Baudrate: {baudrate}")
     print("=" * 60)
-    
-    success = configure_gnss(port, baudrate)
-    
+
+    success, message = configure_gnss(port, baudrate)
+
+    print("\n" + "=" * 60)
+    if success:
+        print("Configuration Complete:")
+        print("  - Measurement Rate: 10Hz (100ms)")
+        print("  - GPS: ENABLED (8-16 channels)")
+        print("  - Galileo: ENABLED (4-8 channels)")
+        print("  - GLONASS: DISABLED")
+        print("  - BeiDou: DISABLED")
+        print("  - QZSS: DISABLED")
+        print("  - SBAS: DISABLED")
+    else:
+        print(f"Configuration failed: {message}")
+    print("=" * 60)
+
     sys.exit(0 if success else 1)

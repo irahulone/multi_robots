@@ -124,7 +124,7 @@ class EnhancedReadGPS(Node):
                         break  # Move to next device
                     
                     # Try to establish new connection
-                    self.serial_port = serial.Serial('/dev/ttyACM0', baudrate=115200, timeout=1)
+                    self.serial_port = serial.Serial(device_path, baudrate=self.baudrate, timeout=self.timeout)
                     
                     # Test if the connection is working
                     if not self.serial_port.is_open:
@@ -156,21 +156,35 @@ class EnhancedReadGPS(Node):
         return False
     
     def _configure_gps(self):
-        """Configure GPS module settings"""
+        """Configure GPS module settings using configure_gnss"""
         try:
-            # Turn on the basic GGA and RMC info (what you typically want)
-            
-            # Set update rate based on configuration
-            '''
-            update_ms = int(1000 / self.update_rate)
-            self.gps.send_ubx_cfg_rate(measRate=update_ms, navRate=1, timeRef=0)
-            self.get_logger().debug(f'GPS module set to {self.update_rate}Hz update rate')
-            
-            time.sleep(0.1)
-            '''
-            
+            from gps_core.configure_gnss import configure_gnss
+
+            # Close serial port temporarily for configuration
+            device_path = self.serial_port.port
+            baudrate = self.serial_port.baudrate
+            self.serial_port.close()
+
+            self.get_logger().info(f'Running GNSS configuration on {device_path}...')
+
+            success, message = configure_gnss(
+                port=device_path,
+                baudrate=baudrate,
+                logger=self.get_logger()
+            )
+
+            if success:
+                self.get_logger().info(f'GNSS configuration completed: {message}')
+            else:
+                self.get_logger().warn(f'GNSS configuration issue: {message}')
+
+            # Reopen serial port after configuration
+            time.sleep(0.5)
+            self.serial_port = serial.Serial(device_path, baudrate=baudrate, timeout=self.timeout)
+            self.gps = UbloxGps(self.serial_port)
+
             self.get_logger().info('GPS module configured successfully')
-            
+
         except Exception as e:
             self.get_logger().error(f'GPS configuration failed: {str(e)}')
             raise
