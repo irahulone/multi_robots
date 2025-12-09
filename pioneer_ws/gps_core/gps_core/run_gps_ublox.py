@@ -48,16 +48,17 @@ class EnhancedReadGPS(Node):
         self.timer_period = self.get_parameter('timer_period').get_parameter_value().double_value
         
         # Log loaded configuration
+        self.get_logger().info(f'GPS Node Version: 1.0.1')
         self.get_logger().info(f'GPS Node Configuration:')
-        self.get_logger().debug(f'  Robot ID: {self.robot_id}')
-        self.get_logger().debug(f'  Baudrate: {self.baudrate}')
-        self.get_logger().debug(f'  Timeout: {self.timeout}')
-        self.get_logger().debug(f'  Connection Timeout: {self.connection_timeout}s')
-        self.get_logger().debug(f'  Retry Delay: {self.retry_delay}s')
-        self.get_logger().debug(f'  Moving Average Rate: {self.moving_avg_r}')
-        self.get_logger().debug(f'  Update Rate: {self.update_rate}Hz')
-        self.get_logger().debug(f'  Timer Period: {self.timer_period}s')
-        self.get_logger().debug(f'  Device Paths: {self.device_paths}')
+        self.get_logger().info(f'  Robot ID: {self.robot_id}')
+        self.get_logger().info(f'  Baudrate: {self.baudrate}')
+        self.get_logger().info(f'  Timeout: {self.timeout}')
+        self.get_logger().info(f'  Connection Timeout: {self.connection_timeout}s')
+        self.get_logger().info(f'  Retry Delay: {self.retry_delay}s')
+        self.get_logger().info(f'  Moving Average Rate: {self.moving_avg_r}')
+        self.get_logger().info(f'  Update Rate: {self.update_rate}Hz')
+        self.get_logger().info(f'  Timer Period: {self.timer_period}s')
+        self.get_logger().info(f'  Device Paths: {self.device_paths}')
         
         # Thread-safe callback group
         self.callback_group = ReentrantCallbackGroup()
@@ -132,9 +133,6 @@ class EnhancedReadGPS(Node):
                     
                     self.gps = UbloxGps(self.serial_port)
                     
-                    # Configure GPS module
-                    self._configure_gps()
-                    
                     # Test GPS communication
                     if self._test_gps_communication():
                         self.connection_healthy = True
@@ -155,57 +153,44 @@ class EnhancedReadGPS(Node):
         self.connection_healthy = False
         return False
     
-    def _configure_gps(self):
-        """Configure GPS module settings using configure_gnss"""
-        try:
-            from gps_core.configure_gnss import configure_gnss
-
-            # Close serial port temporarily for configuration
-            device_path = self.serial_port.port
-            baudrate = self.serial_port.baudrate
-            self.serial_port.close()
-
-            self.get_logger().info(f'Running GNSS configuration on {device_path}...')
-
-            success, message = configure_gnss(
-                port=device_path,
-                baudrate=baudrate,
-                logger=self.get_logger()
-            )
-
-            if success:
-                self.get_logger().info(f'GNSS configuration completed: {message}')
-            else:
-                self.get_logger().warn(f'GNSS configuration issue: {message}')
-
-            # Reopen serial port after configuration
-            time.sleep(0.5)
-            self.serial_port = serial.Serial(device_path, baudrate=baudrate, timeout=self.timeout)
-            self.gps = UbloxGps(self.serial_port)
-
-            self.get_logger().info('GPS module configured successfully')
-
-        except Exception as e:
-            self.get_logger().error(f'GPS configuration failed: {str(e)}')
-            raise
-    
     def _test_gps_communication(self):
-        """Test GPS communication by attempting to read data"""
+        """Test GPS communication by attempting to read data with timeout"""
         try:
-            coords = self.gps.geo_coords()
+            start_time = time.time()
+            
+            # Try reading coordinates until timeout
+            while time.time() - start_time < self.connection_timeout:
+                coords = self.gps.geo_coords()
                 
-            # If we get any data, consider it successful
-            if coords.lat is not None and coords.lon is not None:
-                self.get_logger().info('GPS communication test successful')
-                self.get_logger().info(f'Test coordinates: lat={coords.lat}, lon={coords.lon}')
-                return True
-            
-            self.get_logger().info('GPS communication test failed: No valid data received')
+                # No data yet
+                if coords is None:
+                    self.get_logger().debug('GPS communication test: no data yet')
+                    time.sleep(0.2)
+                    continue
+
+                # Check that coords has lat / lon attributes and they are valid
+                lat = getattr(coords, "lat", None)
+                lon = getattr(coords, "lon", None)
+
+                if lat is not None and lon is not None:
+                    self.get_logger().info('GPS communication test successful')
+                    self.get_logger().info(f'Test coordinates: lat={lat}, lon={lon}')
+                    return True
+
+                # Data object exists but values are not valid yet
+                self.get_logger().debug(
+                    f'GPS communication test: invalid data (lat={lat}, lon={lon}), retrying...')
+                time.sleep(0.2)
+
+            # Timed out
+            self.get_logger().warn(
+                'GPS communication test failed: No valid data received within timeout')
             return False
-            
+
         except Exception as e:
             self.get_logger().error(f'GPS communication test error: {str(e)}')
             return False
+
     
     def _close_connection(self):
         """Safely close GPS connection"""
@@ -280,6 +265,9 @@ class EnhancedReadGPS(Node):
             try:
                 coords = self.gps.geo_coords()
             except (ValueError, IOError) as err:
+                self.get_logger().warn(f'GPS read error: {str(err)}')
+                msg.status.status = -1  # No fix due to connection issues
+                self.gps_publisher.publish(msg)
                 return
             
             if coords is None:
@@ -296,7 +284,7 @@ class EnhancedReadGPS(Node):
                 self.last_successful_read = time.time()
                 
                 # Apply exponential moving average
-                if self.nodata:
+                if self.nodata or True:
                     self.lat_avg = lat
                     self.lon_avg = lon
                     self.nodata = False

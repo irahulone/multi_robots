@@ -187,8 +187,6 @@ while true; do
     device_count=$((device_count + 1))
 done
 
-python gps_core/gps_core/configure_gnss.py /dev/gps 115200
-
 # Default device paths if none specified
 if [ -z "$GPS_DEVICE_PATHS" ]; then
     GPS_DEVICE_PATHS='"/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0", "/dev/ttyACM1", "/dev/gps"'
@@ -490,6 +488,8 @@ cat > "$STARTUP_SCRIPT" << 'STARTUP_EOF'
 # Source ROS environment
 source /opt/ros/jazzy/setup.bash
 source WORK_DIR_PLACEHOLDER/install/setup.bash
+
+/usr/bin/python3 WORK_DIR_PLACEHOLDER/pioneer_ws/gps_core/gps_core/configure_gnss.py /dev/gps 115200
 
 # Set environment variables
 export ROBOT_ID=ROBOT_ID_PLACEHOLDER
