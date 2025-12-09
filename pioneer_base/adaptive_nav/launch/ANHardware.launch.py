@@ -22,7 +22,7 @@ def generate_launch_description():
     # Construct paths to the parameter files relative to the launch file directory
     cluster_file = os.path.join(pkg_share, 'config', '3cluster_velocity.yaml')
     display_launch_file = os.path.join(get_package_share_directory('rover_description'), 'launch', 'display.launch.py')
-    pioneer_launch_file = os.path.join(get_package_share_directory('sim_launch'), 'pioneer_with_hw_desired.launch.py')
+    pioneer_launch_file = os.path.join(get_package_share_directory('sim_launch'), 'pioneer_hw_3.launch.py')
     custom_rviz_config = os.path.join(get_package_share_directory('rover_description'), 'rviz/clusterp1-p3withhw.rviz')
 
     # Check if parameter files exist
@@ -35,6 +35,10 @@ def generate_launch_description():
             executable="cluster_controller",
             name="cluster_feedback", #name must match yaml file
             parameters=[cluster_file], 
+        ),
+        Node(
+            package="joy",
+            executable="joy_node",
         ),
         Node(
             package="adaptive_nav",
@@ -59,8 +63,5 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(display_launch_file),
             launch_arguments={'rvizconfig': custom_rviz_config}.items()
-        ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(pioneer_launch_file)
         )
     ])

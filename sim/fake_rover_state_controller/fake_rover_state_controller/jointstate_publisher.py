@@ -8,7 +8,7 @@ from geometry_msgs.msg import Pose2D
 
 from .my_ros_module import PubSubManager
 
-UPDATE_RATE = 0.1
+UPDATE_RATE = 0.1 #sec
 
 
 class JointStatePublisher(Node):

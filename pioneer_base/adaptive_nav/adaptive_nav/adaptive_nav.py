@@ -20,9 +20,9 @@ Will pulbish the values for sim or actual robots based on the which is active fr
 FREQ = 10 # Frequency to publish velocity commands
 JOY_FREQ = FREQ
 KV = 0.5  # Gain for computed velocity commands
-MAX_DB = -10.0  # Max expected RSSI value in dBm
-MIN_DB = -105.0  # Min expected RSSI value in dBm
-DESIRED_DB = -55.0  # Desired RSSI value in dBm for cross-track controller
+MAX_DB = -0.0  # Max expected RSSI value in dBm
+MIN_DB = -60.0  # Min expected RSSI value in dBm
+DESIRED_DB = -30.0  # Desired RSSI value in dBm for cross-track controller
 
 class ANNode(Node):
     def __init__(self):
@@ -74,7 +74,7 @@ class ANNode(Node):
                 Float64,
                 f'/{robot_id}/rssi',
                 lambda msg, robot_id=robot_id: self.actual_rssi(msg, robot_id),
-                5)
+                10)
             self.pubsub.create_subscription(
                 Float64,
                 f'/sim/{robot_id}/rssi',
@@ -94,7 +94,9 @@ class ANNode(Node):
 
     def actual_rssi(self, msg, robot_id):
         """Update the robot's height in (x, y, z) where z is height in scalar field"""
-        self.gradient.robot_positions[self.robot_id_list.index(robot_id)][2] = self.normalize_db(msg.data, db_min=MAX_DB, db_max=MIN_DB)  # Set min and max based on expected RSSI range
+        self.gradient.robot_positions[self.robot_id_list.index(robot_id)][2] = self.normalize_db(msg.data, db_min=MIN_DB, db_max=MAX_DB)  # Set min and max based on expected RSSI range
+        self.get_logger().info(f"Actual RSSI for {robot_id}: {msg.data}") #values range from -33 to -70
+        self.get_logger().info(f"Actual RSSI for {robot_id}: norm/{self.gradient.robot_positions[self.robot_id_list.index(robot_id)][2]}") #values range from -33 to -70
 
     def sim_rssi(self, msg, robot_id): 
         """Update the robot's height in (x, y, z) where z is height in scalar field"""
