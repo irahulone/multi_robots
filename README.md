@@ -31,10 +31,24 @@ Each of the highest level files has an extended read me detailing there purpose 
 ```
 ~/ros2_ws/
 ├── Docker/                # Files to launch project in docker container
-├── common/                # Custom ROS types and utility classes used throughout 
+├── common/                # Custom ROS types and utility classes used throughout
 ├── pioneer_base/          # Base station often run on laptop
 ├── pioneer_ws/            # Pioneer rover platform
 ├── record/                # Logging and graphing data
 └── sim/                   # Simulation environment
 ```
+
+## Data Analysis and Playback
+
+For replaying recorded ROS bag data with visualization:
+
+```bash
+# Terminal 1: Launch TF publishers and RViz
+ros2 launch adaptive_nav ANBagPlayback.launch.py
+
+# Terminal 2: Play recorded bag file
+ros2 bag play <bag_file_path>
+```
+
+**Note**: The `ANBagPlayback.launch.py` file provides TF transformations and RViz visualization for hardware-recorded data that lacks TF topics. This allows you to visualize field test data in RViz after recording.
 
